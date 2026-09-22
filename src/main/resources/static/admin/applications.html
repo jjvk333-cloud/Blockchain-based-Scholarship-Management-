@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Manage Applications — ScholarTrust</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <nav class="navbar">
+    <div class="brand">🛡️ ScholarTrust <span>Admin Panel</span></div>
+    <div class="nav-right">
+      <span class="nav-user" id="navUser"></span>
+      <button class="btn-logout" onclick="doLogout()">Logout</button>
+    </div>
+  </nav>
+
+  <div class="page-wrapper">
+    <aside class="sidebar">
+      <div class="sidebar-section">Admin</div>
+      <a href="/admin/dashboard.html">🏠 Dashboard</a>
+      <a href="/admin/scholarships.html">🎓 Scholarships</a>
+      <a href="/admin/applications.html" class="active">📋 Applications</a>
+      <div class="sidebar-section">Blockchain</div>
+      <a href="/admin/blockchain.html">🔗 Blockchain Status</a>
+    </aside>
+
+    <main class="main">
+      <h1 class="page-title">Manage Applications</h1>
+
+      <!-- Filters -->
+      <div class="card" style="padding:16px;">
+        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;">
+          <select id="filterStatus" class="form-control" style="width:180px;" onchange="renderTable()">
+            <option value="">All Statuses</option>
+            <option value="PENDING">Pending</option>
+            <option value="REVIEWING">Reviewing</option>
+            <option value="APPROVED">Approved</option>
+            <option value="REJECTED">Rejected</option>
+            <option value="DISBURSED">Disbursed</option>
+          </select>
+          <input type="text" id="filterSearch" class="form-control" style="width:260px;" placeholder="Search student or scholarship…" oninput="renderTable()">
+        </div>
+      </div>
+
+      <div id="alert" class="alert"></div>
+
+      <div class="card">
+        <div id="content">
+          <div class="empty-state"><div class="empty-icon">⏳</div><p>Loading applications…</p></div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Detail / Action Modal -->
+  <div class="modal-overlay" id="detailModal">
+    <div class="modal">
+      <button class="modal-close" onclick="closeModal('detailModal')">✕</button>
+      <div class="modal-title" id="modalTitle">Application Details</div>
+      <div id="modalAlert" class="alert"></div>
+      <div id="modalBody"></div>
+
+      <div id="actionArea" style="margin-top:20px;display:flex;gap:10px;flex-wrap:wrap;"></div>
+    </div>
+  </div>
+
+  <!-- Disburse Modal -->
+  <div class="modal-overlay" id="disburseModal">
+    <div class="modal">
+      <button class="modal-close" onclick="closeModal('disburseModal')">✕</button>
+      <div class="modal-title">💰 Disburse Scholarship Funds</div>
+      <div id="disburseAlert" class="alert"></div>
+      <input type="hidden" id="disburseAppId">
+      <div class="form-group">
+        <label class="form-label">Disbursement Amount (₹)</label>
+        <input type="number" id="disburseAmount" class="form-control" placeholder="e.g. 50000" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Student Recipient Wallet Address</label>
+        <input type="text" id="disburseWallet" class="form-control" placeholder="0x..." required>
+        <div class="form-hint">Ethereum wallet address of the student. This executes an on-chain transaction.</div>
+      </div>
+      <button class="btn btn-success btn-block" id="disburseBtn" onclick="confirmDisburse()">Confirm & Disburse On-Chain</button>
+    </div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script>
+    if (!requireAdmin()) throw new Error('not admin');
+    renderNavUser('navUser');
+    function doLogout() { API.clearSession(); window.location.href = '/admin/login.html'; }
+
+    let allApps = [];
+
+    async function load() {
+      const res = await API.get('/api/admin/applications').catch(() => null);
+      if (!res || !res.success) {
+        document.getElementById('content').innerHTML = '<div class="empty-state"><div class="empty-icon">❌</div><p>Failed to load applications.</p></div>';
+        return;
+      }
+      allApps = res.data || [];
+      renderTable();
+    }
+
+    function renderTable() {
+      const statusF = document.getElementById('filterStatus').value;
+      const searchF = document.getElementById('filterSearch').value.toLowerCase().trim();
+
+      let apps = allApps;
+      if (statusF) apps = apps.filter(a => a.status === statusF);
+      if (searchF) apps = apps.filter(a =>
+        (a.studentName || '').toLowerCase().includes(searchF) ||
+        (a.studentEmail || '').toLowerCase().includes(searchF) ||
+        (a.scholarshipName || a.scholarshipTitle || '').toLowerCase().includes(searchF)
+      );
+
+      if (apps.length === 0) {
+        document.getElementById('content').innerHTML = '<div class="empty-state"><div class="empty-icon">📄</div><p>No applications match the filter.</p></div>';
+        return;
+      }
+
+      const rows = apps.map(a => {
+        const schTitle = a.scholarshipName || a.scholarshipTitle || '—';
+        const hasChain = !!a.blockchainTxHash;
+        return `
+        <tr>
+          <td>#${a.id}</td>
+          <td><strong>${a.studentName || '—'}</strong><br><small style="color:var(--muted)">${a.studentEmail || ''}</small></td>
+          <td>${schTitle}</td>
+          <td>${badgeHtml(a.status)}</td>
+          <td>${fmtDate(a.appliedAt)}</td>
+          <td>${hasChain ? '✅ Anchored' : '—'}</td>
+          <td>
+            <button class="btn btn-primary btn-sm" onclick='openDetail(${JSON.stringify(a).replace(/'/g, "\\'")})'>Review</button>
+          </td>
+        </tr>`;
+      }).join('');
+
+      document.getElementById('content').innerHTML = `
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>#</th><th>Student</th><th>Scholarship</th><th>Status</th><th>Date</th><th>Blockchain</th><th>Action</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>`;
+    }
+
+    function openDetail(app) {
+      document.getElementById('modalTitle').textContent = `Application #${app.id} — ${app.studentName || ''}`;
+      hideAlert('modalAlert');
+
+      const docs = (app.documents || []).map(d => `
+        <div style="margin-bottom:12px;background:#f8fafc;padding:10px;border-radius:6px;border:1px solid var(--border);">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <strong style="font-size:.85rem;">${d.documentType}: ${d.fileName}</strong>
+            <a href="${d.downloadUrl || '#'}" target="_blank" class="btn btn-outline btn-sm">Download</a>
+          </div>
+          <div class="hash-box" style="margin-top:6px;">${d.sha256Hash || '—'}</div>
+          <div style="margin-top:6px;display:flex;align-items:center;gap:8px;">
+            <button class="btn btn-info btn-sm" onclick="verifyHash(${app.id})">
+              🔍 Verify SHA-256 Hash
+            </button>
+            <span id="vResult-${app.id}" style="font-size:.85rem;"></span>
+          </div>
+        </div>`).join('');
+
+      const chain = app.blockchainTxHash
+        ? `<div class="hash-box">${app.blockchainTxHash}</div>`
+        : '<em style="color:var(--muted)">Not yet recorded on blockchain</em>';
+
+      document.getElementById('modalBody').innerHTML = `
+        <table style="font-size:.875rem;width:100%;margin-bottom:14px;">
+          <tr><td style="color:var(--muted);padding:4px 0;width:130px;">Scholarship</td><td><strong>${app.scholarshipName || app.scholarshipTitle || '—'}</strong></td></tr>
+          <tr><td style="color:var(--muted);padding:4px 0;">Student Email</td><td>${app.studentEmail || '—'}</td></tr>
+          <tr><td style="color:var(--muted);padding:4px 0;">Status</td><td>${badgeHtml(app.status)}</td></tr>
+          <tr><td style="color:var(--muted);padding:4px 0;">Applied On</td><td>${fmtDate(app.appliedAt)}</td></tr>
+          <tr><td style="color:var(--muted);padding:4px 0;">GPA</td><td>${app.gpa != null ? app.gpa : '—'}</td></tr>
+          <tr><td style="color:var(--muted);padding:4px 0;">Annual Income</td><td>${fmtMoney(app.annualFamilyIncome || app.annualIncome)}</td></tr>
+          <tr><td style="color:var(--muted);padding:4px 0;">Student Wallet</td><td><code>${app.walletAddress || '—'}</code></td></tr>
+        </table>
+        <div style="margin-bottom:12px;">
+          <div style="font-weight:600;margin-bottom:6px;">🔗 Blockchain Transaction Hash</div>
+          ${chain}
+        </div>
+        <div>
+          <div style="font-weight:600;margin-bottom:8px;">📄 Uploaded Documents & Cryptographic Hashes</div>
+          ${docs || '<em style="color:var(--muted)">No documents uploaded</em>'}
+        </div>`;
+
+      // Action buttons
+      const area = document.getElementById('actionArea');
+      area.innerHTML = '';
+
+      if (app.status === 'PENDING') {
+        area.innerHTML += `<button class="btn btn-info" onclick="changeStatus(${app.id},'REVIEWING')">Mark Reviewing</button>`;
+      }
+      if (app.status === 'PENDING' || app.status === 'REVIEWING') {
+        area.innerHTML += `<button class="btn btn-success" onclick="changeStatus(${app.id},'APPROVED')">✅ Approve Application</button>`;
+        area.innerHTML += `<button class="btn btn-danger"  onclick="changeStatus(${app.id},'REJECTED')">❌ Reject Application</button>`;
+      }
+      if (app.status === 'APPROVED') {
+        area.innerHTML += `<button class="btn btn-warning" onclick="openDisburse(${app.id})">💰 Disburse Scholarship</button>`;
+      }
+      if (app.status === 'DISBURSED') {
+        area.innerHTML += `<button class="btn btn-info" onclick="auditChain(${app.id})">🔗 Audit on Blockchain</button>`;
+        area.innerHTML += `<span id="auditResult" style="font-size:.85rem;margin-left:8px;"></span>`;
+      }
+
+      openModal('detailModal');
+    }
+
+    async function verifyHash(appId) {
+      const el = document.getElementById('vResult-' + appId);
+      if (el) el.innerHTML = '⏳ Computing SHA-256 and verifying…';
+      const res = await API.get(`/api/admin/applications/${appId}/verify-hash`).catch(() => null);
+      if (!res || !res.success || !res.data) {
+        if (el) el.innerHTML = '<span style="color:var(--danger)">❌ Verification error</span>';
+        return;
+      }
+      if (el) {
+        el.innerHTML = res.data.match
+          ? '<span style="color:var(--success);font-weight:600;">✅ MATCH — File is untampered</span>'
+          : '<span style="color:var(--danger);font-weight:600;">⚠️ TAMPERED — Hash mismatch!</span>';
+      }
+    }
+
+    async function changeStatus(appId, status) {
+      setLoading('detailModal', true);
+      const res = await API.put(`/api/admin/applications/${appId}/status`, { status: status, remarks: 'Status updated by admin.' }).catch(() => null);
+      if (!res || !res.success) {
+        showAlert('modalAlert', res?.message || 'Status update failed.', 'error');
+        return;
+      }
+      showAlert('alert', `✅ Application #${appId} status updated to ${status}!`, 'success');
+      closeModal('detailModal');
+      load();
+    }
+
+    function openDisburse(appId) {
+      const app = allApps.find(a => a.id === appId);
+      document.getElementById('disburseAppId').value = appId;
+      document.getElementById('disburseAmount').value = app ? (app.grantAmount || app.amount || '') : '';
+      document.getElementById('disburseWallet').value = app ? (app.walletAddress || '0x90F8bf6A479f320ead074411a4B0e7944Ea8c9C1') : '';
+      hideAlert('disburseAlert');
+      closeModal('detailModal');
+      openModal('disburseModal');
+    }
+
+    async function confirmDisburse() {
+      const appId  = document.getElementById('disburseAppId').value;
+      const amount = parseFloat(document.getElementById('disburseAmount').value);
+      const wallet = document.getElementById('disburseWallet').value.trim();
+
+      if (isNaN(amount) || amount <= 0 || !wallet) {
+        showAlert('disburseAlert', 'Please enter a valid disbursement amount and recipient wallet address.', 'error');
+        return;
+      }
+      setLoading('disburseBtn', true, 'Confirm & Disburse On-Chain');
+
+      const res = await API.post(`/api/admin/applications/${appId}/disburse`, {
+        amount: amount,
+        recipientWalletAddress: wallet
+      }).catch(() => null);
+
+      setLoading('disburseBtn', false, 'Confirm & Disburse On-Chain');
+
+      if (!res || !res.success) {
+        showAlert('disburseAlert', res?.message || 'Disbursement failed on blockchain.', 'error');
+        return;
+      }
+      closeModal('disburseModal');
+      showAlert('alert', `✅ Funds successfully disbursed! Blockchain TX recorded.`, 'success');
+      load();
+    }
+
+    async function auditChain(appId) {
+      const el = document.getElementById('auditResult');
+      if (el) el.innerHTML = '⏳ Querying smart contract…';
+      const res = await API.get(`/api/admin/applications/${appId}/audit`).catch(() => null);
+      if (!res || !res.success || !res.data) {
+        if (el) el.innerHTML = '<span style="color:var(--danger)">❌ Audit failed</span>';
+        return;
+      }
+      const d = res.data;
+      const match = (d.dbStatus === d.blockchainStatus) && d.hashMatch;
+      if (el) {
+        el.innerHTML = match
+          ? `<span style="color:var(--success);font-weight:600;">✅ Verified: DB matches Blockchain (${d.blockchainStatus})</span>`
+          : `<span style="color:var(--danger);font-weight:600;">⚠️ Audit mismatch! DB: ${d.dbStatus} | Chain: ${d.blockchainStatus}</span>`;
+      }
+    }
+
+    load();
+  </script>
+</body>
+</html>

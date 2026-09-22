@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ScholarTrust</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="auth-page">
+  <div class="auth-box" style="text-align:center;">
+    <div class="auth-logo">
+      <h1>🎓 ScholarTrust</h1>
+      <p>Blockchain-Secured Scholarship Management System</p>
+    </div>
+    <p style="color:var(--muted);font-size:.875rem;margin-bottom:24px;">
+      Transparent · Tamper-Proof · Trustworthy
+    </p>
+    <div style="display:flex;flex-direction:column;gap:12px;">
+      <a href="/student/login.html" class="btn btn-primary btn-block">Student Login / Register</a>
+      <a href="/admin/login.html"   class="btn btn-outline  btn-block">Admin Portal</a>
+    </div>
+    <p style="margin-top:20px;font-size:.78rem;color:var(--muted);">
+      Built with Spring Boot · MySQL · Ethereum (Ganache) · Web3j
+    </p>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script>
+    // Auto-redirect if already logged in
+    const u = API.user();
+    if (u && API.token()) {
+      const role = (u.role || '').replace('ROLE_', '').toUpperCase();
+      if (role === 'ADMIN')    window.location.href = '/admin/dashboard.html';
+      else if (role === 'STUDENT') window.location.href = '/student/dashboard.html';
+    }
+  </script>
+</body>
+</html>

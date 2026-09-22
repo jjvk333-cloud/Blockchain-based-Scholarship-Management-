@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Manage Scholarships — ScholarTrust</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <nav class="navbar">
+    <div class="brand">🛡️ ScholarTrust <span>Admin Panel</span></div>
+    <div class="nav-right">
+      <span class="nav-user" id="navUser"></span>
+      <button class="btn-logout" onclick="doLogout()">Logout</button>
+    </div>
+  </nav>
+
+  <div class="page-wrapper">
+    <aside class="sidebar">
+      <div class="sidebar-section">Admin</div>
+      <a href="/admin/dashboard.html">🏠 Dashboard</a>
+      <a href="/admin/scholarships.html" class="active">🎓 Scholarships</a>
+      <a href="/admin/applications.html">📋 Applications</a>
+      <div class="sidebar-section">Blockchain</div>
+      <a href="/admin/blockchain.html">🔗 Blockchain Status</a>
+    </aside>
+
+    <main class="main">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;">
+        <h1 class="page-title" style="margin:0;">Manage Scholarships</h1>
+        <button class="btn btn-primary" onclick="openCreate()">+ New Scholarship</button>
+      </div>
+
+      <div id="alert" class="alert"></div>
+
+      <div class="card">
+        <div id="content">
+          <div class="empty-state"><div class="empty-icon">⏳</div><p>Loading…</p></div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Create / Edit Modal -->
+  <div class="modal-overlay" id="formModal">
+    <div class="modal">
+      <button class="modal-close" onclick="closeModal('formModal')">✕</button>
+      <div class="modal-title" id="formTitle">New Scholarship</div>
+      <div id="formAlert" class="alert"></div>
+
+      <input type="hidden" id="editId">
+
+      <div class="form-group">
+        <label class="form-label">Name / Title *</label>
+        <input type="text" id="fName" class="form-control" placeholder="Scholarship name" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Description *</label>
+        <textarea id="fDesc" class="form-control" rows="2" placeholder="Brief description" required></textarea>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Grant Amount (₹) *</label>
+          <input type="number" id="fAmount" class="form-control" placeholder="50000" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Min GPA (0–10)</label>
+          <input type="number" id="fGpa" class="form-control" placeholder="e.g. 7.5 (optional)" step="0.1" min="0" max="10">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Max Annual Family Income (₹)</label>
+          <input type="number" id="fIncome" class="form-control" placeholder="e.g. 500000 (optional)">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Deadline *</label>
+          <input type="date" id="fDeadline" class="form-control" required>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Status</label>
+        <select id="fActive" class="form-control">
+          <option value="true">Active</option>
+          <option value="false">Inactive</option>
+        </select>
+      </div>
+
+      <button class="btn btn-primary btn-block" id="formBtn" onclick="saveScholarship()">Create Scholarship</button>
+    </div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script>
+    if (!requireAdmin()) throw new Error('not admin');
+    renderNavUser('navUser');
+    function doLogout() { API.clearSession(); window.location.href = '/admin/login.html'; }
+
+    async function load() {
+      const res = await API.get('/api/admin/scholarships').catch(() => null);
+      if (!res || !res.success || !res.data || !res.data.length) {
+        document.getElementById('content').innerHTML = '<div class="empty-state"><div class="empty-icon">🎓</div><p>No scholarships yet. Click "+ New Scholarship" to create one!</p></div>';
+        return;
+      }
+      const rows = res.data.map(s => {
+        const title = s.title || s.name || 'Scholarship';
+        const amount = s.grantAmount != null ? s.grantAmount : s.amount;
+        const safeTitle = title.replace(/'/g, "\\'");
+        return `
+        <tr>
+          <td>${s.id}</td>
+          <td><strong>${title}</strong></td>
+          <td>${fmtMoney(amount)}</td>
+          <td>${s.minGpa != null ? s.minGpa : '—'}</td>
+          <td>${fmtDate(s.deadline)}</td>
+          <td>${badgeHtml(s.active ? 'ACTIVE' : 'INACTIVE')}</td>
+          <td>
+            <button class="btn btn-outline btn-sm" onclick='editScholarship(${JSON.stringify(s)})'>Edit</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteScholarship(${s.id}, '${safeTitle}')">Deactivate</button>
+          </td>
+        </tr>`;
+      }).join('');
+
+      document.getElementById('content').innerHTML = `
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>#</th><th>Name</th><th>Amount</th><th>Min GPA</th><th>Deadline</th><th>Status</th><th>Actions</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>`;
+    }
+
+    function openCreate() {
+      document.getElementById('formTitle').textContent = 'New Scholarship';
+      document.getElementById('formBtn').textContent = 'Create Scholarship';
+      document.getElementById('editId').value = '';
+      ['fName','fDesc','fAmount','fGpa','fIncome','fDeadline'].forEach(id => document.getElementById(id).value = '');
+      document.getElementById('fActive').value = 'true';
+      hideAlert('formAlert');
+      openModal('formModal');
+    }
+
+    function editScholarship(s) {
+      document.getElementById('formTitle').textContent = 'Edit Scholarship';
+      document.getElementById('formBtn').textContent = 'Save Changes';
+      document.getElementById('editId').value = s.id;
+      document.getElementById('fName').value = s.title || s.name || '';
+      document.getElementById('fDesc').value = s.description || '';
+      document.getElementById('fAmount').value = s.grantAmount != null ? s.grantAmount : (s.amount || '');
+      document.getElementById('fGpa').value = s.minGpa != null ? s.minGpa : '';
+      document.getElementById('fIncome').value = s.maxAnnualIncome != null ? s.maxAnnualIncome : (s.maxIncome || '');
+      document.getElementById('fDeadline').value = s.deadline ? s.deadline.substring(0, 10) : '';
+      document.getElementById('fActive').value = s.active ? 'true' : 'false';
+      hideAlert('formAlert');
+      openModal('formModal');
+    }
+
+    async function saveScholarship() {
+      const id = document.getElementById('editId').value;
+      const title = document.getElementById('fName').value.trim();
+      const desc = document.getElementById('fDesc').value.trim();
+      const amountVal = parseFloat(document.getElementById('fAmount').value);
+      const deadline = document.getElementById('fDeadline').value;
+
+      if (!title || !desc || isNaN(amountVal) || !deadline) {
+        showAlert('formAlert', 'Please fill in all required fields (Title, Description, Amount, Deadline).', 'error');
+        return;
+      }
+
+      const body = {
+        title:           title,
+        name:            title,
+        description:     desc,
+        grantAmount:     amountVal,
+        amount:          amountVal,
+        minGpa:          parseFloat(document.getElementById('fGpa').value) || 0.0,
+        maxAnnualIncome: parseFloat(document.getElementById('fIncome').value) || 99999999.0,
+        maxIncome:       parseFloat(document.getElementById('fIncome').value) || 99999999.0,
+        deadline:        deadline,
+        active:          document.getElementById('fActive').value === 'true'
+      };
+
+      setLoading('formBtn', true);
+      const res = id
+        ? await API.put(`/api/admin/scholarships/${id}`, body).catch(() => null)
+        : await API.post('/api/admin/scholarships', body).catch(() => null);
+      setLoading('formBtn', false, id ? 'Save Changes' : 'Create Scholarship');
+
+      if (!res || !res.success) {
+        showAlert('formAlert', res?.message || 'Failed to save scholarship.', 'error');
+        return;
+      }
+      closeModal('formModal');
+      showAlert('alert', `✅ Scholarship ${id ? 'updated' : 'created'} successfully!`, 'success');
+      load();
+    }
+
+    async function deleteScholarship(id, name) {
+      if (!confirm(`Deactivate "${name}"?`)) return;
+      const res = await API.delete(`/api/admin/scholarships/${id}`).catch(() => null);
+      if (!res || !res.success) {
+        showAlert('alert', res?.message || 'Failed to deactivate.', 'error');
+        return;
+      }
+      showAlert('alert', `✅ Scholarship deactivated.`, 'success');
+      load();
+    }
+
+    load();
+  </script>
+</body>
+</html>

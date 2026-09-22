@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Applications — ScholarTrust</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <nav class="navbar">
+    <div class="brand">🎓 ScholarTrust <span>Student Portal</span></div>
+    <div class="nav-right">
+      <span class="nav-user" id="navUser"></span>
+      <button class="btn-logout" onclick="doLogout()">Logout</button>
+    </div>
+  </nav>
+
+  <div class="page-wrapper">
+    <aside class="sidebar">
+      <div class="sidebar-section">Navigation</div>
+      <a href="/student/dashboard.html">🏠 Dashboard</a>
+      <a href="/student/scholarships.html">📋 Browse Scholarships</a>
+      <a href="/student/my-applications.html" class="active">📁 My Applications</a>
+    </aside>
+
+    <main class="main">
+      <h1 class="page-title">My Applications</h1>
+      <div id="alert" class="alert"></div>
+      <div id="content">
+        <div class="empty-state"><div class="empty-icon">⏳</div><p>Loading applications…</p></div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Detail Modal -->
+  <div class="modal-overlay" id="detailModal">
+    <div class="modal">
+      <button class="modal-close" onclick="closeModal('detailModal')">✕</button>
+      <div class="modal-title" id="detailTitle">Application Detail</div>
+      <div id="detailBody"></div>
+    </div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script>
+    if (!requireStudent()) throw new Error('not student');
+    renderNavUser('navUser');
+    function doLogout() { API.clearSession(); window.location.href = '/student/login.html'; }
+
+    async function loadApplications() {
+      const res = await API.get('/api/applications/my').catch(() => null);
+      if (!res || !res.success) {
+        showAlert('alert', 'Failed to load applications.', 'error');
+        return;
+      }
+      const apps = res.data || [];
+      if (apps.length === 0) {
+        document.getElementById('content').innerHTML = `
+          <div class="empty-state">
+            <div class="empty-icon">📄</div>
+            <p>No applications yet. <a href="/student/scholarships.html">Browse scholarships</a> to apply.</p>
+          </div>`;
+        return;
+      }
+
+      const rows = apps.map(a => `
+        <tr>
+          <td><strong>${a.scholarshipName || '—'}</strong></td>
+          <td>${badgeHtml(a.status)}</td>
+          <td>${fmtDate(a.appliedAt)}</td>
+          <td style="font-family:monospace;font-size:.75rem;color:var(--info)">
+            ${a.blockchainTxHash ? a.blockchainTxHash.substring(0,18)+'…' : '<span style="color:var(--muted)">—</span>'}
+          </td>
+          <td>
+            <button class="btn btn-outline btn-sm" onclick='viewDetail(${JSON.stringify(a).replace(/'/g,"\\'")} )'>Details</button>
+          </td>
+        </tr>`).join('');
+
+      document.getElementById('content').innerHTML = `
+        <div class="card">
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Scholarship</th><th>Status</th><th>Applied On</th><th>Blockchain TX</th><th>Action</th></tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+        </div>`;
+    }
+
+    function viewDetail(app) {
+      document.getElementById('detailTitle').textContent = app.scholarshipName || 'Application Detail';
+
+      const docs = (app.documents || []).map(d => `
+        <div style="margin-bottom:12px;">
+          <div style="font-weight:600;font-size:.85rem;">${d.documentType}</div>
+          <div class="hash-box">${d.sha256Hash || '—'}</div>
+          <button class="btn btn-info btn-sm" style="margin-top:6px;" onclick="verifyHash(${app.id}, ${d.id})">
+            🔍 Verify Integrity
+          </button>
+          <span id="verify-${d.id}" style="margin-left:8px;font-size:.8rem;"></span>
+        </div>`).join('');
+
+      const chain = app.blockchainTxHash
+        ? `<div class="hash-box" style="margin-top:6px;">${app.blockchainTxHash}</div>`
+        : '<span style="color:var(--muted)">Not yet recorded on blockchain</span>';
+
+      let disburse = '';
+      if (app.disbursement) {
+        disburse = `
+          <div class="card" style="margin-top:16px;background:#f0fdf4;">
+            <div class="card-title" style="color:var(--success)">💰 Disbursement Details</div>
+            <table style="font-size:.85rem;">
+              <tr><td style="padding:4px 8px;color:var(--muted)">Amount</td><td>${fmtMoney(app.disbursement.amount)}</td></tr>
+              <tr><td style="padding:4px 8px;color:var(--muted)">Date</td><td>${fmtDate(app.disbursement.disbursedAt)}</td></tr>
+              <tr><td style="padding:4px 8px;color:var(--muted)">TX Hash</td><td style="font-family:monospace;font-size:.75rem;word-break:break-all">${app.disbursement.transactionHash || '—'}</td></tr>
+              <tr><td style="padding:4px 8px;color:var(--muted)">Block #</td><td>${app.disbursement.blockNumber || '—'}</td></tr>
+            </table>
+          </div>`;
+      }
+
+      document.getElementById('detailBody').innerHTML = `
+        <div style="margin-bottom:12px;">
+          <strong>Status:</strong> ${badgeHtml(app.status)} &nbsp;
+          <strong>Applied:</strong> ${fmtDate(app.appliedAt)}
+        </div>
+        <div style="margin-bottom:16px;">
+          <div style="font-weight:600;margin-bottom:4px;">🔗 Blockchain Transaction</div>
+          ${chain}
+        </div>
+        <div>
+          <div style="font-weight:600;margin-bottom:8px;">📄 Documents & Hashes</div>
+          ${docs || '<span style="color:var(--muted)">No documents uploaded.</span>'}
+        </div>
+        ${disburse}`;
+
+      openModal('detailModal');
+    }
+
+    async function verifyHash(appId, docId) {
+      const el = document.getElementById('verify-' + docId);
+      if (el) el.textContent = '⏳ Verifying…';
+      const res = await API.get(`/api/applications/${appId}/verify-hash`).catch(() => null);
+      if (!res) { if (el) el.textContent = '❌ Error'; return; }
+      if (el) {
+        if (res.data && res.data.match) {
+          el.innerHTML = '<span style="color:var(--success)">✅ MATCH — File untampered</span>';
+        } else {
+          el.innerHTML = '<span style="color:var(--danger)">⚠️ TAMPERED — Hash mismatch!</span>';
+        }
+      }
+    }
+
+    loadApplications();
+  </script>
+</body>
+</html>

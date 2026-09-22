@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Browse Scholarships — ScholarTrust</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    .sch-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px,1fr)); gap: 20px; }
+    .sch-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 22px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 10px; }
+    .sch-card h3 { font-size: 1rem; font-weight: 700; color: var(--text); }
+    .sch-meta { font-size: .8rem; color: var(--muted); display: flex; gap: 12px; flex-wrap: wrap; }
+    .sch-amount { font-size: 1.4rem; font-weight: 700; color: var(--success); }
+    .sch-desc { font-size: .85rem; color: var(--muted); line-height: 1.5; }
+    .sch-footer { margin-top: auto; display: flex; gap: 8px; }
+  </style>
+</head>
+<body>
+  <nav class="navbar">
+    <div class="brand">🎓 ScholarTrust <span>Student Portal</span></div>
+    <div class="nav-right">
+      <span class="nav-user" id="navUser"></span>
+      <button class="btn-logout" onclick="doLogout()">Logout</button>
+    </div>
+  </nav>
+
+  <div class="page-wrapper">
+    <aside class="sidebar">
+      <div class="sidebar-section">Navigation</div>
+      <a href="/student/dashboard.html">🏠 Dashboard</a>
+      <a href="/student/scholarships.html" class="active">📋 Browse Scholarships</a>
+      <a href="/student/my-applications.html">📁 My Applications</a>
+    </aside>
+
+    <main class="main">
+      <h1 class="page-title">Browse Scholarships</h1>
+      <div id="alert" class="alert"></div>
+      <div id="grid" class="sch-grid">
+        <div class="empty-state"><div class="empty-icon">⏳</div><p>Loading scholarships…</p></div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Apply Modal -->
+  <div class="modal-overlay" id="applyModal">
+    <div class="modal">
+      <button class="modal-close" onclick="closeModal('applyModal')">✕</button>
+      <div class="modal-title">📝 Apply for Scholarship</div>
+
+      <div id="modalAlert" class="alert"></div>
+
+      <div class="form-group">
+        <label class="form-label">Scholarship</label>
+        <input type="text" id="modalSchName" class="form-control" readonly>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">GPA / Percentage</label>
+          <input type="number" id="gpa" class="form-control" placeholder="e.g. 8.5" step="0.01" min="0" max="10">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Annual Family Income (₹)</label>
+          <input type="number" id="income" class="form-control" placeholder="e.g. 300000">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Personal Statement</label>
+        <textarea id="statement" class="form-control" rows="3" placeholder="Why do you deserve this scholarship?"></textarea>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Marksheet (PDF/Image) <span style="color:var(--danger)">*</span></label>
+        <input type="file" id="marksheet" class="form-control" accept=".pdf,.jpg,.jpeg,.png" required>
+        <div class="form-hint">This document's SHA-256 hash will be anchored on the blockchain for tamper-proof verification.</div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Income Certificate (optional)</label>
+        <input type="file" id="incomeCert" class="form-control" accept=".pdf,.jpg,.jpeg,.png">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Other Document (optional)</label>
+        <input type="file" id="otherDoc" class="form-control" accept=".pdf,.jpg,.jpeg,.png">
+      </div>
+
+      <button class="btn btn-primary btn-block" id="applyBtn" onclick="submitApplication()">Submit Application</button>
+    </div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script>
+    if (!requireStudent()) throw new Error('not student');
+    renderNavUser('navUser');
+    function doLogout() { API.clearSession(); window.location.href = '/student/login.html'; }
+
+    let currentScholarshipId = null;
+
+    async function loadScholarships() {
+      const res = await fetch('/api/scholarships').then(r => r.json()).catch(() => null);
+      if (!res || !res.success || !res.data.length) {
+        document.getElementById('grid').innerHTML = '<div class="empty-state"><div class="empty-icon">📭</div><p>No scholarships available right now.</p></div>';
+        return;
+      }
+
+      const cards = res.data.map(s => {
+        const name = s.title || s.name || 'Scholarship';
+        const amount = s.grantAmount != null ? s.grantAmount : s.amount;
+        const maxIncome = s.maxAnnualIncome != null ? s.maxAnnualIncome : s.maxIncome;
+        const safeName = name.replace(/'/g, "\\'");
+        return `
+        <div class="sch-card">
+          <h3>${name}</h3>
+          <div class="sch-amount">${fmtMoney(amount)}</div>
+          <div class="sch-meta">
+            <span>📅 Deadline: ${fmtDate(s.deadline)}</span>
+            ${badgeHtml(s.active ? 'ACTIVE' : 'INACTIVE')}
+          </div>
+          <div class="sch-desc">${s.description || ''}</div>
+          <div class="sch-meta">
+            ${s.minGpa ? '<span>📊 Min GPA: ' + s.minGpa + '</span>' : ''}
+            ${maxIncome ? '<span>💰 Max Income: ' + fmtMoney(maxIncome) + '</span>' : ''}
+          </div>
+          <div class="sch-footer">
+            <button class="btn btn-primary btn-sm" onclick="openApply(${s.id}, '${safeName}', ${s.active})">Apply Now</button>
+          </div>
+        </div>`;
+      }).join('');
+
+      document.getElementById('grid').innerHTML = cards;
+    }
+
+    function openApply(id, name, active) {
+      if (!active) { showAlert('alert', 'This scholarship is currently inactive.', 'warning'); return; }
+      currentScholarshipId = id;
+      document.getElementById('modalSchName').value = name;
+      document.getElementById('gpa').value = '';
+      document.getElementById('income').value = '';
+      document.getElementById('statement').value = '';
+      document.getElementById('marksheet').value = '';
+      document.getElementById('incomeCert').value = '';
+      document.getElementById('otherDoc').value = '';
+      hideAlert('modalAlert');
+      openModal('applyModal');
+    }
+
+    async function submitApplication() {
+      if (!currentScholarshipId) return;
+      const marksheet = document.getElementById('marksheet').files[0];
+      if (!marksheet) { showAlert('modalAlert', 'Marksheet is required.', 'error'); return; }
+
+      setLoading('applyBtn', true, 'Submit Application');
+      hideAlert('modalAlert');
+
+      const fd = new FormData();
+      fd.append('scholarshipId', currentScholarshipId);
+      fd.append('gpa', document.getElementById('gpa').value || '');
+      fd.append('annualIncome', document.getElementById('income').value || '');
+      fd.append('personalStatement', document.getElementById('statement').value || '');
+      fd.append('marksheet', marksheet);
+
+      const incomeCert = document.getElementById('incomeCert').files[0];
+      if (incomeCert) fd.append('incomeCertificate', incomeCert);
+
+      const otherDoc = document.getElementById('otherDoc').files[0];
+      if (otherDoc) fd.append('otherDocument', otherDoc);
+
+      const res = await API.postForm('/api/applications/apply', fd).catch(() => null);
+      setLoading('applyBtn', false, 'Submit Application');
+
+      if (!res || !res.success) {
+        showAlert('modalAlert', res?.message || 'Submission failed. Try again.', 'error');
+        return;
+      }
+      showAlert('modalAlert', '✅ Application submitted! Blockchain record created.', 'success');
+      setTimeout(() => { closeModal('applyModal'); window.location.href = '/student/my-applications.html'; }, 2000);
+    }
+
+    loadScholarships();
+  </script>
+</body>
+</html>

@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Student Login — ScholarTrust</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="auth-page">
+  <div class="auth-box">
+    <div class="auth-logo">
+      <h1>🎓 ScholarTrust</h1>
+      <p>Blockchain-Secured Scholarship Portal</p>
+    </div>
+
+    <div id="alert" class="alert"></div>
+
+    <form id="loginForm">
+      <div class="form-group">
+        <label class="form-label">Email Address</label>
+        <input type="email" id="email" class="form-control" placeholder="student@example.com" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Password</label>
+        <input type="password" id="password" class="form-control" placeholder="••••••••" required>
+      </div>
+      <button type="submit" id="submitBtn" class="btn btn-primary btn-block">Login</button>
+    </form>
+
+    <div class="auth-footer">
+      New student? <a href="/student/register.html">Create account</a> &nbsp;|&nbsp;
+      Admin? <a href="/admin/login.html">Admin portal</a>
+    </div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script>
+    (function() {
+      const u = API.user();
+      const role = (u?.role || '').replace('ROLE_', '').toUpperCase();
+      if (u && role === 'STUDENT' && API.token()) {
+        window.location.href = '/student/dashboard.html';
+      }
+    })();
+
+    document.getElementById('loginForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      hideAlert('alert');
+      setLoading('submitBtn', true, 'Login');
+
+      const res = await API.post('/api/auth/login', {
+        email: document.getElementById('email').value.trim(),
+        password: document.getElementById('password').value
+      }).catch(() => null);
+
+      setLoading('submitBtn', false, 'Login');
+
+      if (!res || !res.success) {
+        showAlert('alert', res?.message || 'Login failed. Check credentials.', 'error');
+        return;
+      }
+      const role = (res.data?.role || '').replace('ROLE_', '').toUpperCase();
+      if (role !== 'STUDENT') {
+        showAlert('alert', 'This portal is for students only. Please use the <a href="/admin/login.html">Admin Portal</a>.', 'warning');
+        return;
+      }
+      API.setSession(res.data.token, res.data);
+      window.location.href = '/student/dashboard.html';
+    });
+  </script>
+</body>
+</html>

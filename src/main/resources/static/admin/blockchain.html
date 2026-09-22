@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Blockchain Status — ScholarTrust</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <nav class="navbar">
+    <div class="brand">🛡️ ScholarTrust <span>Admin Panel</span></div>
+    <div class="nav-right">
+      <span class="nav-user" id="navUser"></span>
+      <button class="btn-logout" onclick="doLogout()">Logout</button>
+    </div>
+  </nav>
+
+  <div class="page-wrapper">
+    <aside class="sidebar">
+      <div class="sidebar-section">Admin</div>
+      <a href="/admin/dashboard.html">🏠 Dashboard</a>
+      <a href="/admin/scholarships.html">🎓 Scholarships</a>
+      <a href="/admin/applications.html">📋 Applications</a>
+      <div class="sidebar-section">Blockchain</div>
+      <a href="/admin/blockchain.html" class="active">🔗 Blockchain Status</a>
+    </aside>
+
+    <main class="main">
+      <h1 class="page-title">Blockchain Status</h1>
+
+      <!-- Network info -->
+      <div class="card" id="networkCard">
+        <div class="card-title">🌐 Network Information</div>
+        <div id="networkInfo">
+          <div class="empty-state"><div class="empty-icon">⏳</div><p>Connecting to blockchain…</p></div>
+        </div>
+      </div>
+
+      <!-- Audit all disbursed -->
+      <div class="card">
+        <div class="card-title">🔍 Audit Disbursed Applications</div>
+        <p style="font-size:.875rem;color:var(--muted);margin-bottom:16px;">
+          Compare on-chain records with the MySQL database for every disbursed application. Any mismatch indicates tampering.
+        </p>
+        <button class="btn btn-primary" id="auditAllBtn" onclick="auditAll()">Run Full Audit</button>
+        <div id="auditAlert" class="alert" style="margin-top:12px;"></div>
+        <div id="auditResults" style="margin-top:16px;"></div>
+      </div>
+
+      <!-- Single audit -->
+      <div class="card">
+        <div class="card-title">🔎 Audit Single Application</div>
+        <div style="display:flex;gap:12px;align-items:flex-end;">
+          <div class="form-group" style="margin:0;flex:1;">
+            <label class="form-label">Application ID</label>
+            <input type="number" id="singleId" class="form-control" placeholder="e.g. 3">
+          </div>
+          <button class="btn btn-info" onclick="auditSingle()">Audit</button>
+        </div>
+        <div id="singleResult" style="margin-top:12px;font-size:.875rem;"></div>
+      </div>
+    </main>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script>
+    if (!requireAdmin()) throw new Error('not admin');
+    renderNavUser('navUser');
+    function doLogout() { API.clearSession(); window.location.href = '/admin/login.html'; }
+
+    async function loadNetwork() {
+      const res = await API.get('/api/blockchain/network').catch(() => null);
+      if (!res || !res.success || !res.data) {
+        document.getElementById('networkInfo').innerHTML = `
+          <div class="alert alert-error show">❌ Cannot connect to blockchain. Make sure Ganache is running on port 8545.</div>`;
+        return;
+      }
+      const d = res.data;
+      document.getElementById('networkInfo').innerHTML = `
+        <div class="stats-grid" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr));">
+          <div class="stat-card">
+            <div class="stat-value" style="font-size:1.1rem;font-family:monospace;word-break:break-all;">${d.connected ? '🟢 Connected' : '🔴 Disconnected'}</div>
+            <div class="stat-label">Node Status</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" style="font-size:1.4rem;">${d.blockNumber || '—'}</div>
+            <div class="stat-label">Latest Block</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" style="font-size:1.4rem;">${d.networkId || '—'}</div>
+            <div class="stat-label">Network ID</div>
+          </div>
+        </div>
+        <div style="margin-top:16px;">
+          <div style="font-weight:600;margin-bottom:6px;">Contract Address</div>
+          <div class="hash-box">${d.contractAddress || '—'}</div>
+        </div>
+        <div style="margin-top:12px;">
+          <div style="font-weight:600;margin-bottom:6px;">Admin Address</div>
+          <div class="hash-box">${d.adminAddress || '—'}</div>
+        </div>`;
+    }
+
+    async function auditAll() {
+      setLoading('auditAllBtn', true, 'Run Full Audit');
+      hideAlert('auditAlert');
+      document.getElementById('auditResults').innerHTML = '';
+
+      // Get all disbursed applications
+      const res = await API.get('/api/admin/applications').catch(() => null);
+      setLoading('auditAllBtn', false, 'Run Full Audit');
+
+      if (!res || !res.success) {
+        showAlert('auditAlert', 'Failed to load applications.', 'error'); return;
+      }
+
+      const disbursed = (res.data || []).filter(a => a.status === 'DISBURSED');
+      if (disbursed.length === 0) {
+        showAlert('auditAlert', 'No disbursed applications to audit.', 'info'); return;
+      }
+
+      showAlert('auditAlert', `⏳ Auditing ${disbursed.length} disbursed application(s)…`, 'info');
+
+      let rows = '';
+      for (const app of disbursed) {
+        const aRes = await API.get(`/api/admin/applications/${app.id}/audit`).catch(() => null);
+        let statusHtml = '<span style="color:var(--muted)">Error</span>';
+        if (aRes && aRes.success && aRes.data) {
+          const d = aRes.data;
+          const match = d.dbStatus === d.blockchainStatus && d.hashMatch;
+          statusHtml = match
+            ? '<span style="color:var(--success)">✅ PASS — DB matches Blockchain</span>'
+            : `<span style="color:var(--danger)">⚠️ MISMATCH — DB: ${d.dbStatus} | Chain: ${d.blockchainStatus}</span>`;
+        }
+        rows += `<tr>
+          <td>#${app.id}</td>
+          <td>${app.studentName || '—'}</td>
+          <td>${app.scholarshipName || '—'}</td>
+          <td>${statusHtml}</td>
+        </tr>`;
+      }
+
+      hideAlert('auditAlert');
+      document.getElementById('auditResults').innerHTML = `
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>#</th><th>Student</th><th>Scholarship</th><th>Audit Result</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>`;
+    }
+
+    async function auditSingle() {
+      const id = document.getElementById('singleId').value;
+      if (!id) { document.getElementById('singleResult').innerHTML = '<span style="color:var(--danger)">Please enter an Application ID.</span>'; return; }
+
+      document.getElementById('singleResult').innerHTML = '⏳ Auditing…';
+      const res = await API.get(`/api/admin/applications/${id}/audit`).catch(() => null);
+
+      if (!res || !res.success || !res.data) {
+        document.getElementById('singleResult').innerHTML = '<span style="color:var(--danger)">❌ Audit failed. Check Application ID.</span>';
+        return;
+      }
+
+      const d = res.data;
+      const match = d.dbStatus === d.blockchainStatus;
+      document.getElementById('singleResult').innerHTML = `
+        <div class="card" style="margin:0;">
+          <table style="font-size:.875rem;">
+            <tr><td style="color:var(--muted);padding:5px 10px;width:160px;">Application ID</td><td>${d.applicationId}</td></tr>
+            <tr><td style="color:var(--muted);padding:5px 10px;">DB Status</td><td>${badgeHtml(d.dbStatus)}</td></tr>
+            <tr><td style="color:var(--muted);padding:5px 10px;">Blockchain Status</td><td><code>${d.blockchainStatus || '—'}</code></td></tr>
+            <tr><td style="color:var(--muted);padding:5px 10px;">Hash Match</td><td>${d.hashMatch ? '✅ Yes' : '⚠️ No'}</td></tr>
+            <tr><td style="color:var(--muted);padding:5px 10px;">Overall</td><td>${match ? '<span style="color:var(--success)">✅ PASS</span>' : '<span style="color:var(--danger)">⚠️ MISMATCH</span>'}</td></tr>
+          </table>
+        </div>`;
+    }
+
+    loadNetwork();
+  </script>
+</body>
+</html>

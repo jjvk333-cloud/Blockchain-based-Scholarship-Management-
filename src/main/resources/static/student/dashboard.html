@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Student Dashboard — ScholarTrust</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <!-- Navbar -->
+  <nav class="navbar">
+    <div class="brand">🎓 ScholarTrust <span>Student Portal</span></div>
+    <div class="nav-right">
+      <span class="nav-user" id="navUser"></span>
+      <button class="btn-logout" onclick="doLogout()">Logout</button>
+    </div>
+  </nav>
+
+  <div class="page-wrapper">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-section">Navigation</div>
+      <a href="/student/dashboard.html" class="active">🏠 Dashboard</a>
+      <a href="/student/scholarships.html">📋 Browse Scholarships</a>
+      <a href="/student/my-applications.html">📁 My Applications</a>
+    </aside>
+
+    <!-- Main content -->
+    <main class="main">
+      <h1 class="page-title">Dashboard <small>Welcome back!</small></h1>
+
+      <div class="stats-grid" id="statsGrid">
+        <div class="stat-card"><div class="stat-value" id="statTotal">—</div><div class="stat-label">My Applications</div></div>
+        <div class="stat-card"><div class="stat-value" id="statPending">—</div><div class="stat-label">Pending Review</div></div>
+        <div class="stat-card"><div class="stat-value" id="statApproved">—</div><div class="stat-label">Approved</div></div>
+        <div class="stat-card"><div class="stat-value" id="statDisbursed">—</div><div class="stat-label">Disbursed</div></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">📢 Recent Applications</div>
+        <div id="recentList">
+          <div class="empty-state"><div class="empty-icon">📄</div><p>Loading your applications…</p></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">🔗 Quick Actions</div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;">
+          <a href="/student/scholarships.html" class="btn btn-primary">Browse Scholarships</a>
+          <a href="/student/my-applications.html" class="btn btn-outline">View All Applications</a>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script>
+    if (!requireStudent()) throw new Error('not student');
+    renderNavUser('navUser');
+
+    function doLogout() {
+      API.clearSession();
+      window.location.href = '/student/login.html';
+    }
+
+    async function loadDashboard() {
+      const res = await API.get('/api/applications/my').catch(() => null);
+      if (!res || !res.success) { return; }
+
+      const apps = res.data || [];
+      document.getElementById('statTotal').textContent    = apps.length;
+      document.getElementById('statPending').textContent  = apps.filter(a => a.status === 'PENDING' || a.status === 'REVIEWING').length;
+      document.getElementById('statApproved').textContent = apps.filter(a => a.status === 'APPROVED').length;
+      document.getElementById('statDisbursed').textContent= apps.filter(a => a.status === 'DISBURSED').length;
+
+      const recent = apps.slice(0, 5);
+      if (recent.length === 0) {
+        document.getElementById('recentList').innerHTML = '<div class="empty-state"><div class="empty-icon">📄</div><p>No applications yet. <a href="/student/scholarships.html">Browse scholarships</a> to apply.</p></div>';
+        return;
+      }
+
+      let rows = recent.map(a => `
+        <tr>
+          <td><strong>${a.scholarshipName || 'Scholarship'}</strong></td>
+          <td>${badgeHtml(a.status)}</td>
+          <td>${fmtDate(a.appliedAt)}</td>
+          <td>${a.blockchainTxHash ? '✅ On-chain' : '⏳ Pending'}</td>
+          <td><a href="/student/my-applications.html" class="btn btn-outline btn-sm">View</a></td>
+        </tr>`).join('');
+
+      document.getElementById('recentList').innerHTML = `
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Scholarship</th><th>Status</th><th>Applied</th><th>Blockchain</th><th>Action</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>`;
+    }
+
+    loadDashboard();
+  </script>
+</body>
+</html>

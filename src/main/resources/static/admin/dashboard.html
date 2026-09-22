@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Dashboard — ScholarTrust</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <nav class="navbar">
+    <div class="brand">🛡️ ScholarTrust <span>Admin Panel</span></div>
+    <div class="nav-right">
+      <span class="nav-user" id="navUser"></span>
+      <button class="btn-logout" onclick="doLogout()">Logout</button>
+    </div>
+  </nav>
+
+  <div class="page-wrapper">
+    <aside class="sidebar">
+      <div class="sidebar-section">Admin</div>
+      <a href="/admin/dashboard.html" class="active">🏠 Dashboard</a>
+      <a href="/admin/scholarships.html">🎓 Scholarships</a>
+      <a href="/admin/applications.html">📋 Applications</a>
+      <div class="sidebar-section">Blockchain</div>
+      <a href="/admin/blockchain.html">🔗 Blockchain Status</a>
+    </aside>
+
+    <main class="main">
+      <h1 class="page-title">Admin Dashboard</h1>
+
+      <div class="stats-grid" id="statsGrid">
+        <div class="stat-card"><div class="stat-value" id="sTotal">—</div><div class="stat-label">Total Applications</div></div>
+        <div class="stat-card"><div class="stat-value" id="sPending">—</div><div class="stat-label">Pending Review</div></div>
+        <div class="stat-card"><div class="stat-value" id="sApproved">—</div><div class="stat-label">Approved</div></div>
+        <div class="stat-card"><div class="stat-value" id="sDisbursed">—</div><div class="stat-label">Disbursed</div></div>
+        <div class="stat-card"><div class="stat-value" id="sScholarships">—</div><div class="stat-label">Active Scholarships</div></div>
+        <div class="stat-card"><div class="stat-value" id="sStudents">—</div><div class="stat-label">Registered Students</div></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">📋 Recent Applications (last 10)</div>
+        <div id="recentApps">
+          <div class="empty-state"><div class="empty-icon">⏳</div><p>Loading…</p></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">⚡ Quick Actions</div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;">
+          <a href="/admin/scholarships.html" class="btn btn-primary">Manage Scholarships</a>
+          <a href="/admin/applications.html" class="btn btn-warning">Review Applications</a>
+          <a href="/admin/blockchain.html" class="btn btn-info">Blockchain Audit</a>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script>
+    if (!requireAdmin()) throw new Error('not admin');
+    renderNavUser('navUser');
+    function doLogout() { API.clearSession(); window.location.href = '/admin/login.html'; }
+
+    async function loadDashboard() {
+      const [healthRes, appRes] = await Promise.all([
+        fetch('/api/health').then(r => r.json()).catch(() => null),
+        API.get('/api/admin/applications').catch(() => null)
+      ]);
+
+      if (healthRes && healthRes.data) {
+        document.getElementById('sScholarships').textContent = healthRes.data.scholarshipCount || 0;
+        document.getElementById('sStudents').textContent = healthRes.data.userCount || 0;
+      }
+
+      if (appRes && appRes.success) {
+        const apps = appRes.data || [];
+        document.getElementById('sTotal').textContent    = apps.length;
+        document.getElementById('sPending').textContent  = apps.filter(a => a.status === 'PENDING' || a.status === 'REVIEWING').length;
+        document.getElementById('sApproved').textContent = apps.filter(a => a.status === 'APPROVED').length;
+        document.getElementById('sDisbursed').textContent= apps.filter(a => a.status === 'DISBURSED').length;
+
+        const recent = apps.slice(0, 10);
+        if (recent.length === 0) {
+          document.getElementById('recentApps').innerHTML = '<div class="empty-state"><div class="empty-icon">📄</div><p>No applications yet.</p></div>';
+          return;
+        }
+
+        const rows = recent.map(a => `
+          <tr>
+            <td>${a.id}</td>
+            <td><strong>${a.studentName || '—'}</strong></td>
+            <td>${a.scholarshipName || '—'}</td>
+            <td>${badgeHtml(a.status)}</td>
+            <td>${fmtDate(a.appliedAt)}</td>
+            <td><a href="/admin/applications.html" class="btn btn-outline btn-sm">Manage</a></td>
+          </tr>`).join('');
+
+        document.getElementById('recentApps').innerHTML = `
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>#</th><th>Student</th><th>Scholarship</th><th>Status</th><th>Date</th><th>Action</th></tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>`;
+      }
+    }
+
+    loadDashboard();
+  </script>
+</body>
+</html>
