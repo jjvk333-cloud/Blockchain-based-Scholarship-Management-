@@ -105,6 +105,7 @@ class ScholarshipServiceTest {
         StudentProfile profile = new StudentProfile();
         profile.setGpa(new BigDecimal("8.5"));
         profile.setAnnualFamilyIncome(new BigDecimal("200000"));
+        profile.setWalletAddress("0x70997970C51812dc3A010C7d01b50e0d17dc79C8");
 
         when(scholarshipRepository.findById(1L)).thenReturn(Optional.of(scholarship));
         when(userRepository.findByEmail("student@college.edu")).thenReturn(Optional.of(student));

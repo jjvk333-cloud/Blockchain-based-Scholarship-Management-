@@ -55,6 +55,9 @@ class ApplicationServiceTest {
     @Mock
     private BlockchainService blockchainService;
 
+    @Mock
+    private ScholarshipService scholarshipService;
+
     private ApplicationService applicationService;
 
     @BeforeEach
@@ -67,7 +70,8 @@ class ApplicationServiceTest {
                 documentRepository,
                 disbursementRepository,
                 fileStorageService,
-                blockchainService
+                blockchainService,
+                scholarshipService
         );
     }
 
@@ -195,5 +199,77 @@ class ApplicationServiceTest {
         assertEquals(new BigDecimal("50000"), receipt.getDisbursedAmount());
         assertEquals("0xabcdef1234567890", receipt.getBlockchainTxHash());
         assertEquals(42L, receipt.getBlockNumber());
+    }
+    @Test
+    @DisplayName("Should create application snapshot and store personal statement successfully")
+    void testSubmitApplicationCreatesSnapshotAndStoresStatement() {
+        User student = new User("student@college.edu", "pass", "Aarav Sharma", Role.ROLE_STUDENT);
+        student.setId(10L);
+        Scholarship scholarship = new Scholarship("Merit", "Desc", new BigDecimal("8.0"), new BigDecimal("300000"), new BigDecimal("50000"), LocalDateTime.now().plusDays(10), null);
+        scholarship.setId(1L);
+
+        StudentProfile profile = new StudentProfile();
+        profile.setRollNumber("2026CS101");
+        profile.setDepartment("Computer Science");
+        profile.setGpa(new BigDecimal("8.5"));
+        profile.setAnnualFamilyIncome(new BigDecimal("200000"));
+        profile.setWalletAddress("0x70997970C51812dc3A010C7d01b50e0d17dc79C8");
+
+        MockMultipartFile marksheet = new MockMultipartFile("marksheet", "marks.pdf", "application/pdf", "data".getBytes());
+
+        when(userRepository.findByEmail("student@college.edu")).thenReturn(Optional.of(student));
+        when(scholarshipRepository.findById(1L)).thenReturn(Optional.of(scholarship));
+        when(applicationRepository.existsByStudentAndScholarship(student, scholarship)).thenReturn(false);
+        when(studentProfileRepository.findByUser(student)).thenReturn(Optional.of(profile));
+        when(scholarshipService.evaluateEligibility(scholarship, profile))
+                .thenReturn(new ScholarshipService.EligibilityResult(true, Collections.singletonList("Eligible")));
+        when(fileStorageService.calculateSha256(any(org.springframework.web.multipart.MultipartFile.class))).thenReturn("sha256abc");
+        when(fileStorageService.storeFile(any(org.springframework.web.multipart.MultipartFile.class), any(), any())).thenReturn("uploads/marks.pdf");
+        when(applicationRepository.save(any(Application.class))).thenAnswer(invocation -> {
+            Application app = invocation.getArgument(0);
+            app.setId(100L);
+            return app;
+        });
+        when(documentRepository.save(any(Document.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ApplicationResponse res = applicationService.submitApplication(
+                1L, marksheet, null, null, "student@college.edu", "My research interest statement"
+        );
+
+        assertNotNull(res);
+        assertEquals("My research interest statement", res.getPersonalStatement());
+        assertEquals("2026CS101", res.getSubmittedRollNumber());
+        assertEquals("Computer Science", res.getSubmittedDepartment());
+        assertEquals(new BigDecimal("8.5"), res.getSubmittedGpa());
+        assertEquals(new BigDecimal("200000"), res.getSubmittedAnnualIncome());
+        assertEquals("0x70997970C51812dc3A010C7d01b50e0d17dc79C8", res.getSubmittedWalletAddress());
+    }
+
+    @Test
+    @DisplayName("Should reject application when student is ineligible according to unified eligibility evaluator")
+    void testSubmitApplicationIneligibleRejected() {
+        User student = new User("student@college.edu", "pass", "Aarav Sharma", Role.ROLE_STUDENT);
+        Scholarship scholarship = new Scholarship("Merit", "Desc", new BigDecimal("8.0"), new BigDecimal("300000"), new BigDecimal("50000"), LocalDateTime.now().plusDays(10), null);
+        scholarship.setId(1L);
+
+        StudentProfile profile = new StudentProfile();
+        profile.setRollNumber("2026CS101");
+        profile.setDepartment("Computer Science");
+        profile.setGpa(new BigDecimal("7.0")); // below min 8.0
+        profile.setAnnualFamilyIncome(new BigDecimal("200000"));
+        profile.setWalletAddress("0x70997970C51812dc3A010C7d01b50e0d17dc79C8");
+
+        MockMultipartFile marksheet = new MockMultipartFile("marksheet", "marks.pdf", "application/pdf", "data".getBytes());
+
+        when(userRepository.findByEmail("student@college.edu")).thenReturn(Optional.of(student));
+        when(scholarshipRepository.findById(1L)).thenReturn(Optional.of(scholarship));
+        when(applicationRepository.existsByStudentAndScholarship(student, scholarship)).thenReturn(false);
+        when(studentProfileRepository.findByUser(student)).thenReturn(Optional.of(profile));
+        when(scholarshipService.evaluateEligibility(scholarship, profile))
+                .thenReturn(new ScholarshipService.EligibilityResult(false, Collections.singletonList("GPA below minimum")));
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> applicationService.submitApplication(1L, marksheet, null, null, "student@college.edu", null));
+        assertTrue(ex.getMessage().contains("Eligibility requirements not met"));
     }
 }

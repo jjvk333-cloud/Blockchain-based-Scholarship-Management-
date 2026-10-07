@@ -1,6 +1,7 @@
 package com.scholarship.scholartrust.entity;
 
 import jakarta.persistence.*;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -33,6 +34,24 @@ public class Application {
 
     @Column(name = "admin_remarks", columnDefinition = "TEXT")
     private String adminRemarks;
+
+    @Column(name = "personal_statement", columnDefinition = "TEXT")
+    private String personalStatement;
+
+    @Column(name = "submitted_roll_number", length = 50)
+    private String submittedRollNumber;
+
+    @Column(name = "submitted_department", length = 100)
+    private String submittedDepartment;
+
+    @Column(name = "submitted_gpa", precision = 3, scale = 2)
+    private BigDecimal submittedGpa;
+
+    @Column(name = "submitted_annual_income", precision = 12, scale = 2)
+    private BigDecimal submittedAnnualIncome;
+
+    @Column(name = "submitted_wallet_address", length = 42)
+    private String submittedWalletAddress;
 
     @Column(name = "applied_at", nullable = false, updatable = false)
     private LocalDateTime appliedAt;
@@ -119,6 +138,54 @@ public class Application {
 
     public void setAppliedAt(LocalDateTime appliedAt) {
         this.appliedAt = appliedAt;
+    }
+
+    public String getPersonalStatement() {
+        return personalStatement;
+    }
+
+    public void setPersonalStatement(String personalStatement) {
+        this.personalStatement = personalStatement;
+    }
+
+    public String getSubmittedRollNumber() {
+        return submittedRollNumber;
+    }
+
+    public void setSubmittedRollNumber(String submittedRollNumber) {
+        this.submittedRollNumber = submittedRollNumber;
+    }
+
+    public String getSubmittedDepartment() {
+        return submittedDepartment;
+    }
+
+    public void setSubmittedDepartment(String submittedDepartment) {
+        this.submittedDepartment = submittedDepartment;
+    }
+
+    public BigDecimal getSubmittedGpa() {
+        return submittedGpa;
+    }
+
+    public void setSubmittedGpa(BigDecimal submittedGpa) {
+        this.submittedGpa = submittedGpa;
+    }
+
+    public BigDecimal getSubmittedAnnualIncome() {
+        return submittedAnnualIncome;
+    }
+
+    public void setSubmittedAnnualIncome(BigDecimal submittedAnnualIncome) {
+        this.submittedAnnualIncome = submittedAnnualIncome;
+    }
+
+    public String getSubmittedWalletAddress() {
+        return submittedWalletAddress;
+    }
+
+    public void setSubmittedWalletAddress(String submittedWalletAddress) {
+        this.submittedWalletAddress = submittedWalletAddress;
     }
 
     public LocalDateTime getUpdatedAt() {

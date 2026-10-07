@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -30,6 +31,78 @@ public class ScholarshipService {
         this.scholarshipRepository = scholarshipRepository;
         this.userRepository = userRepository;
         this.studentProfileRepository = studentProfileRepository;
+    }
+
+    public static class EligibilityResult {
+        private final boolean eligible;
+        private final List<String> reasons;
+
+        public EligibilityResult(boolean eligible, List<String> reasons) {
+            this.eligible = eligible;
+            this.reasons = reasons;
+        }
+
+        public boolean isEligible() { return eligible; }
+        public List<String> getReasons() { return reasons; }
+    }
+
+    public EligibilityResult evaluateEligibility(Scholarship scholarship, StudentProfile profile) {
+        List<String> reasons = new ArrayList<>();
+        boolean isEligible = true;
+
+        if (scholarship == null) {
+            return new EligibilityResult(false, Collections.singletonList("Scholarship does not exist."));
+        }
+
+        if (!scholarship.isActive()) {
+            isEligible = false;
+            reasons.add("Scholarship is currently inactive.");
+        }
+
+        if (scholarship.getDeadline() != null && scholarship.getDeadline().isBefore(LocalDateTime.now())) {
+            isEligible = false;
+            reasons.add("Application deadline expired on " + scholarship.getDeadline());
+        }
+
+        if (profile == null) {
+            return new EligibilityResult(false, Collections.singletonList("Student profile has not been completed. Please set up your academic profile first."));
+        }
+
+        // Academic GPA check
+        if (scholarship.getMinGpa() != null) {
+            if (profile.getGpa() == null) {
+                isEligible = false;
+                reasons.add(String.format("GPA is not set in your student profile. Required minimum: %.2f.", scholarship.getMinGpa()));
+            } else if (profile.getGpa().compareTo(scholarship.getMinGpa()) < 0) {
+                isEligible = false;
+                reasons.add(String.format("Your GPA (%.2f) is below the required minimum (%.2f).",
+                        profile.getGpa(), scholarship.getMinGpa()));
+            }
+        }
+
+        // Family Income ceiling check
+        if (scholarship.getMaxAnnualIncome() != null) {
+            if (profile.getAnnualFamilyIncome() == null) {
+                isEligible = false;
+                reasons.add(String.format("Annual family income is not set in your profile. Maximum allowed ceiling: ₹%.2f.", scholarship.getMaxAnnualIncome()));
+            } else if (profile.getAnnualFamilyIncome().compareTo(scholarship.getMaxAnnualIncome()) > 0) {
+                isEligible = false;
+                reasons.add(String.format("Your annual family income (₹%.2f) exceeds the maximum ceiling (₹%.2f).",
+                        profile.getAnnualFamilyIncome(), scholarship.getMaxAnnualIncome()));
+            }
+        }
+
+        // Wallet address check
+        if (profile.getWalletAddress() == null || !profile.getWalletAddress().matches("^0x[a-fA-F0-9]{40}$")) {
+            isEligible = false;
+            reasons.add("A valid Ethereum wallet address (0x followed by 40 hex characters) is required in your profile.");
+        }
+
+        if (isEligible) {
+            reasons.add("You fulfill all academic, income, and identity criteria!");
+        }
+
+        return new EligibilityResult(isEligible, reasons);
     }
 
     @Transactional
@@ -106,40 +179,13 @@ public class ScholarshipService {
                 .orElseThrow(() -> new IllegalArgumentException("Student not found with email: " + studentEmail));
 
         StudentProfile profile = studentProfileRepository.findByUser(student)
-                .orElseThrow(() -> new IllegalStateException("Student profile not completed"));
+                .orElseThrow(() -> new IllegalStateException("Student profile not completed. Please fill in your profile before checking eligibility."));
 
         ScholarshipResponse response = mapToResponse(scholarship);
-        List<String> reasons = new ArrayList<>();
-        boolean isEligible = true;
+        EligibilityResult result = evaluateEligibility(scholarship, profile);
 
-        if (!scholarship.isActive()) {
-            isEligible = false;
-            reasons.add("Scholarship is currently inactive.");
-        }
-
-        if (scholarship.getDeadline().isBefore(LocalDateTime.now())) {
-            isEligible = false;
-            reasons.add("Application deadline has expired on " + scholarship.getDeadline());
-        }
-
-        if (profile.getGpa().compareTo(scholarship.getMinGpa()) < 0) {
-            isEligible = false;
-            reasons.add(String.format("Your GPA (%.2f) is below the required minimum (%.2f).",
-                    profile.getGpa(), scholarship.getMinGpa()));
-        }
-
-        if (profile.getAnnualFamilyIncome().compareTo(scholarship.getMaxAnnualIncome()) > 0) {
-            isEligible = false;
-            reasons.add(String.format("Your annual family income (₹%.2f) exceeds the maximum ceiling (₹%.2f).",
-                    profile.getAnnualFamilyIncome(), scholarship.getMaxAnnualIncome()));
-        }
-
-        if (isEligible) {
-            reasons.add("You fulfill all academic and income eligibility criteria!");
-        }
-
-        response.setEligible(isEligible);
-        response.setEligibilityReasons(reasons);
+        response.setEligible(result.isEligible());
+        response.setEligibilityReasons(result.getReasons());
         return response;
     }
 

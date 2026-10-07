@@ -24,6 +24,13 @@ public class ApplicationResponse {
     private BigDecimal annualFamilyIncome;
     private String walletAddress;
 
+    private String personalStatement;
+    private String submittedRollNumber;
+    private String submittedDepartment;
+    private BigDecimal submittedGpa;
+    private BigDecimal submittedAnnualIncome;
+    private String submittedWalletAddress;
+
     private ApplicationStatus status;
     private String blockchainTxHash;
     private String adminRemarks;
@@ -112,6 +119,24 @@ public class ApplicationResponse {
 
     public String getWalletAddress() { return walletAddress; }
     public void setWalletAddress(String walletAddress) { this.walletAddress = walletAddress; }
+
+    public String getPersonalStatement() { return personalStatement; }
+    public void setPersonalStatement(String personalStatement) { this.personalStatement = personalStatement; }
+
+    public String getSubmittedRollNumber() { return submittedRollNumber; }
+    public void setSubmittedRollNumber(String submittedRollNumber) { this.submittedRollNumber = submittedRollNumber; }
+
+    public String getSubmittedDepartment() { return submittedDepartment; }
+    public void setSubmittedDepartment(String submittedDepartment) { this.submittedDepartment = submittedDepartment; }
+
+    public BigDecimal getSubmittedGpa() { return submittedGpa; }
+    public void setSubmittedGpa(BigDecimal submittedGpa) { this.submittedGpa = submittedGpa; }
+
+    public BigDecimal getSubmittedAnnualIncome() { return submittedAnnualIncome; }
+    public void setSubmittedAnnualIncome(BigDecimal submittedAnnualIncome) { this.submittedAnnualIncome = submittedAnnualIncome; }
+
+    public String getSubmittedWalletAddress() { return submittedWalletAddress; }
+    public void setSubmittedWalletAddress(String submittedWalletAddress) { this.submittedWalletAddress = submittedWalletAddress; }
 
     public ApplicationStatus getStatus() { return status; }
     public void setStatus(ApplicationStatus status) { this.status = status; }

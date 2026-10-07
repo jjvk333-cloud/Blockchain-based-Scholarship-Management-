@@ -75,7 +75,8 @@ public class ApplicationController {
                 marksheet,
                 incomeCertificate,
                 other,
-                authentication.getName()
+                authentication.getName(),
+                personalStatement
         );
 
         return ResponseEntity.status(HttpStatus.CREATED)

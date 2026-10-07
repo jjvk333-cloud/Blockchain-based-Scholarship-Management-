@@ -39,6 +39,7 @@ public class ApplicationService {
     private final DisbursementRepository disbursementRepository;
     private final FileStorageService fileStorageService;
     private final BlockchainService blockchainService;
+    private final ScholarshipService scholarshipService;
 
     public ApplicationService(ApplicationRepository applicationRepository,
                               ScholarshipRepository scholarshipRepository,
@@ -47,7 +48,8 @@ public class ApplicationService {
                               DocumentRepository documentRepository,
                               DisbursementRepository disbursementRepository,
                               FileStorageService fileStorageService,
-                              BlockchainService blockchainService) {
+                              BlockchainService blockchainService,
+                              ScholarshipService scholarshipService) {
         this.applicationRepository = applicationRepository;
         this.scholarshipRepository = scholarshipRepository;
         this.userRepository = userRepository;
@@ -56,6 +58,7 @@ public class ApplicationService {
         this.disbursementRepository = disbursementRepository;
         this.fileStorageService = fileStorageService;
         this.blockchainService = blockchainService;
+        this.scholarshipService = scholarshipService;
     }
 
     @Transactional
@@ -64,19 +67,21 @@ public class ApplicationService {
                                                  MultipartFile incomeCertificate,
                                                  MultipartFile otherDocument,
                                                  String studentEmail) {
+        return submitApplication(scholarshipId, marksheet, incomeCertificate, otherDocument, studentEmail, null);
+    }
+
+    @Transactional
+    public ApplicationResponse submitApplication(Long scholarshipId,
+                                                 MultipartFile marksheet,
+                                                 MultipartFile incomeCertificate,
+                                                 MultipartFile otherDocument,
+                                                 String studentEmail,
+                                                 String personalStatement) {
         User student = userRepository.findByEmail(studentEmail)
                 .orElseThrow(() -> new IllegalArgumentException("Student not found"));
 
         Scholarship scholarship = scholarshipRepository.findById(scholarshipId)
                 .orElseThrow(() -> new IllegalArgumentException("Scholarship not found with ID: " + scholarshipId));
-
-        if (!scholarship.isActive()) {
-            throw new IllegalStateException("This scholarship is currently inactive.");
-        }
-
-        if (scholarship.getDeadline().isBefore(LocalDateTime.now())) {
-            throw new IllegalStateException("The application deadline for this scholarship has passed.");
-        }
 
         if (applicationRepository.existsByStudentAndScholarship(student, scholarship)) {
             throw new IllegalStateException("You have already applied for this scholarship.");
@@ -86,28 +91,30 @@ public class ApplicationService {
             throw new IllegalArgumentException("Marksheet document is required.");
         }
 
-        // Get or create student profile
-        StudentProfile profile = studentProfileRepository.findByUser(student).orElse(null);
+        StudentProfile profile = studentProfileRepository.findByUser(student)
+                .orElseThrow(() -> new IllegalStateException("Student profile not found. Please complete your academic profile before applying."));
 
-        // Only check eligibility if profile has the relevant fields filled
-        if (profile != null) {
-            if (profile.getGpa() != null && scholarship.getMinGpa() != null
-                    && profile.getGpa().compareTo(scholarship.getMinGpa()) < 0) {
-                throw new IllegalArgumentException(String.format(
-                    "GPA requirement not met. Your GPA: %.2f, Required: %.2f",
-                    profile.getGpa(), scholarship.getMinGpa()));
-            }
-            if (profile.getAnnualFamilyIncome() != null && scholarship.getMaxAnnualIncome() != null
-                    && profile.getAnnualFamilyIncome().compareTo(scholarship.getMaxAnnualIncome()) > 0) {
-                throw new IllegalArgumentException(String.format(
-                    "Income ceiling exceeded. Your income: %.2f, Max allowed: %.2f",
-                    profile.getAnnualFamilyIncome(), scholarship.getMaxAnnualIncome()));
-            }
+        // Evaluate eligibility strictly using unified evaluator
+        ScholarshipService.EligibilityResult eligibility = scholarshipService.evaluateEligibility(scholarship, profile);
+        if (!eligibility.isEligible()) {
+            throw new IllegalArgumentException("Eligibility requirements not met: " + String.join(" ", eligibility.getReasons()));
         }
 
-        // Create Application
+        String walletAddr = profile.getWalletAddress();
+        if (walletAddr == null || !walletAddr.matches("^0x[a-fA-F0-9]{40}$")) {
+            throw new IllegalStateException("A valid registered Ethereum wallet address is required before applying.");
+        }
+
+        // Create Application with Snapshot
         Application application = new Application(student, scholarship);
         application.setStatus(ApplicationStatus.PENDING);
+        application.setPersonalStatement(personalStatement);
+        application.setSubmittedRollNumber(profile.getRollNumber());
+        application.setSubmittedDepartment(profile.getDepartment());
+        application.setSubmittedGpa(profile.getGpa());
+        application.setSubmittedAnnualIncome(profile.getAnnualFamilyIncome());
+        application.setSubmittedWalletAddress(walletAddr);
+
         Application savedApp = applicationRepository.save(application);
 
         // Process & Hash Marksheet
@@ -122,13 +129,6 @@ public class ApplicationService {
         }
 
         // Anchor Application & Marksheet Hash on Blockchain
-        String walletAddr = (profile != null && profile.getWalletAddress() != null && !profile.getWalletAddress().isBlank())
-                ? profile.getWalletAddress()
-                : "0xFFcf8FDEE72ac11b5c542428B35EEF5769C409f0";
-        if (profile != null && (profile.getWalletAddress() == null || profile.getWalletAddress().isBlank())) {
-            profile.setWalletAddress(walletAddr);
-            studentProfileRepository.save(profile);
-        }
         try {
             String txHash = blockchainService.recordApplicationOnChain(
                     savedApp.getId(),
@@ -139,7 +139,7 @@ public class ApplicationService {
             savedApp.setBlockchainTxHash(txHash);
             applicationRepository.save(savedApp);
         } catch (Exception e) {
-            // Blockchain failure should not fail the application submission
+            // Log blockchain failure; DB application submission is preserved
         }
 
         return mapToResponse(savedApp);
@@ -272,7 +272,7 @@ public class ApplicationService {
         }
 
         try {
-            blockchainService.updateStatusOnChain(applicationId, newStatus.ordinal());
+            blockchainService.updateStatusOnChain(applicationId, newStatus.toChainOrdinal());
         } catch (Exception e) {
             // Blockchain failure does not block status update in DB
         }
@@ -394,7 +394,7 @@ public class ApplicationService {
             audit.setOnChainDocHash(onChainHash);
 
             int statusOrdinal = ((Uint8) chainData.get(4)).getValue().intValue();
-            String chainStatus = ApplicationStatus.values()[Math.min(statusOrdinal, ApplicationStatus.values().length - 1)].name();
+            String chainStatus = ApplicationStatus.fromChainOrdinal(statusOrdinal).name();
             audit.setBlockchainStatus(chainStatus);
             audit.setOnChainStatus(chainStatus);
 
@@ -518,6 +518,14 @@ public class ApplicationService {
             dto.setAnnualFamilyIncome(p.getAnnualFamilyIncome());
             dto.setWalletAddress(p.getWalletAddress());
         });
+
+        // Set snapshot fields and personal statement
+        dto.setPersonalStatement(app.getPersonalStatement());
+        dto.setSubmittedRollNumber(app.getSubmittedRollNumber());
+        dto.setSubmittedDepartment(app.getSubmittedDepartment());
+        dto.setSubmittedGpa(app.getSubmittedGpa());
+        dto.setSubmittedAnnualIncome(app.getSubmittedAnnualIncome());
+        dto.setSubmittedWalletAddress(app.getSubmittedWalletAddress());
 
         dto.setStatus(app.getStatus());
         dto.setBlockchainTxHash(app.getBlockchainTxHash());
