@@ -40,6 +40,7 @@ public class ApplicationService {
     private final FileStorageService fileStorageService;
     private final BlockchainService blockchainService;
     private final ScholarshipService scholarshipService;
+    private final IdentityVerificationService identityVerificationService;
 
     public ApplicationService(ApplicationRepository applicationRepository,
                               ScholarshipRepository scholarshipRepository,
@@ -49,7 +50,8 @@ public class ApplicationService {
                               DisbursementRepository disbursementRepository,
                               FileStorageService fileStorageService,
                               BlockchainService blockchainService,
-                              ScholarshipService scholarshipService) {
+                              ScholarshipService scholarshipService,
+                              IdentityVerificationService identityVerificationService) {
         this.applicationRepository = applicationRepository;
         this.scholarshipRepository = scholarshipRepository;
         this.userRepository = userRepository;
@@ -59,6 +61,7 @@ public class ApplicationService {
         this.fileStorageService = fileStorageService;
         this.blockchainService = blockchainService;
         this.scholarshipService = scholarshipService;
+        this.identityVerificationService = identityVerificationService;
     }
 
     @Transactional
@@ -98,6 +101,10 @@ public class ApplicationService {
         ScholarshipService.EligibilityResult eligibility = scholarshipService.evaluateEligibility(scholarship, profile);
         if (!eligibility.isEligible()) {
             throw new IllegalArgumentException("Eligibility requirements not met: " + String.join(" ", eligibility.getReasons()));
+        }
+
+        if (!identityVerificationService.isStudentVerified(student)) {
+            throw new IllegalStateException("Institutional identity verification required. Please submit your ID card and await verification before applying.");
         }
 
         String walletAddr = profile.getWalletAddress();

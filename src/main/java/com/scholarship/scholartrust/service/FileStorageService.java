@@ -44,6 +44,10 @@ public class FileStorageService {
         }
     }
 
+    public String storeFile(MultipartFile file) {
+        return storeFile(file, 0L, DocumentType.ID_PROOF);
+    }
+
     public String storeFile(MultipartFile file, Long applicationId, DocumentType docType) {
         if (file == null || file.isEmpty()) {
             throw new IllegalArgumentException("Cannot store empty file.");

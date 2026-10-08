@@ -58,6 +58,9 @@ class ApplicationServiceTest {
     @Mock
     private ScholarshipService scholarshipService;
 
+    @Mock
+    private IdentityVerificationService identityVerificationService;
+
     private ApplicationService applicationService;
 
     @BeforeEach
@@ -71,7 +74,8 @@ class ApplicationServiceTest {
                 disbursementRepository,
                 fileStorageService,
                 blockchainService,
-                scholarshipService
+                scholarshipService,
+                identityVerificationService
         );
     }
 
@@ -223,6 +227,7 @@ class ApplicationServiceTest {
         when(studentProfileRepository.findByUser(student)).thenReturn(Optional.of(profile));
         when(scholarshipService.evaluateEligibility(scholarship, profile))
                 .thenReturn(new ScholarshipService.EligibilityResult(true, Collections.singletonList("Eligible")));
+        when(identityVerificationService.isStudentVerified(student)).thenReturn(true);
         when(fileStorageService.calculateSha256(any(org.springframework.web.multipart.MultipartFile.class))).thenReturn("sha256abc");
         when(fileStorageService.storeFile(any(org.springframework.web.multipart.MultipartFile.class), any(), any())).thenReturn("uploads/marks.pdf");
         when(applicationRepository.save(any(Application.class))).thenAnswer(invocation -> {
