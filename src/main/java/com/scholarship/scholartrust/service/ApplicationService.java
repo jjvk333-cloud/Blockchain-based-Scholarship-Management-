@@ -230,11 +230,18 @@ public class ApplicationService {
         boolean diskMatch = recalculatedHash.equalsIgnoreCase(doc.getSha256Hash());
 
         boolean chainMatch = false;
+        boolean blockchainAvailable = true;
         try {
             chainMatch = blockchainService.verifyHashOnChain(applicationId, recalculatedHash);
         } catch (Exception e) {
-            // If blockchain is unavailable, only check disk
-            chainMatch = diskMatch;
+            blockchainAvailable = false;
+        }
+
+        if (!blockchainAvailable) {
+            response.setMatch(false);
+            response.setStatus("BLOCKCHAIN_UNAVAILABLE");
+            response.setVerdictDetails("Cryptographic verification incomplete: Blockchain node is currently unavailable. Stored database record is " + (diskMatch ? "intact on disk" : "tampered on disk") + ".");
+            return response;
         }
 
         boolean match = diskMatch && chainMatch;

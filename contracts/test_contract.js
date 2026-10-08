@@ -45,7 +45,14 @@ async function test() {
     const tamperedCheck = await contract.methods.verifyDocumentHash(appId, fakeHash).call();
     console.log("Tampered Document Hash Check -> isMatch:", tamperedCheck.isMatch);
 
-    console.log("\n=== 5. Simulating On-Chain Scholarship Disbursement ===");
+    console.log("\n=== 5. Updating Status to APPROVED ===");
+    const approveTx = await contract.methods.updateApplicationStatus(appId, 2).send({
+        from: admin,
+        gas: '150000'
+    });
+    console.log("Approval Tx Hash:", approveTx.transactionHash);
+
+    console.log("\n=== 6. Simulating On-Chain Scholarship Disbursement ===");
     const grantAmount = 50000;
     const disburseTx = await contract.methods.disburseScholarship(appId, studentWallet, grantAmount).send({
         from: admin,

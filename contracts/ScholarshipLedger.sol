@@ -112,7 +112,7 @@ contract ScholarshipLedger {
         uint8 _status
     ) external onlyAdmin {
         require(applications[_applicationId].exists, "Application does not exist");
-        require(_status <= uint8(Status.DISBURSED), "Invalid status");
+        require(_status < uint8(Status.DISBURSED), "Use disburseScholarship to transition to DISBURSED");
 
         applications[_applicationId].status = Status(_status);
 
@@ -121,6 +121,7 @@ contract ScholarshipLedger {
 
     /**
      * @notice Simulates scholarship disbursement to the student's Ethereum address.
+     * Enforces that an application must be APPROVED before disbursement.
      */
     function disburseScholarship(
         uint256 _applicationId,
@@ -128,6 +129,7 @@ contract ScholarshipLedger {
         uint256 _amount
     ) external onlyAdmin {
         require(applications[_applicationId].exists, "Application does not exist");
+        require(applications[_applicationId].status == Status.APPROVED, "Application must be APPROVED before disbursement");
         require(!disbursements[_applicationId].exists, "Scholarship already disbursed for this application");
         require(applications[_applicationId].studentAddress == _studentAddress, "Recipient address mismatch");
 
