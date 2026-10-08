@@ -128,12 +128,22 @@ function logout() {
   window.location.href = '/student/login.html';
 }
 
+function escapeHtml(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 /* ---- UI helpers ---- */
 function showAlert(id, msg, type = 'error') {
   const el = document.getElementById(id);
   if (!el) return;
   el.className = `alert alert-${type} show`;
-  el.innerHTML = msg;
+  el.innerHTML = msg; // Can contain formatted text, but dynamic strings should use escapeHtml()
   el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 

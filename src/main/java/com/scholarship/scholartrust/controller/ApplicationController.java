@@ -20,6 +20,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.util.HtmlUtils;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -237,20 +238,20 @@ public class ApplicationController {
             </body>
             </html>
             """.formatted(
-                r.getReceiptNumber(),
-                r.getDisbursedAt() != null ? r.getDisbursedAt().toString() : "N/A",
-                r.getStudentName(),
-                r.getStudentEmail(),
-                r.getRollNumber(),
-                r.getDepartment(),
-                r.getScholarshipTitle(),
-                r.getGrantAmount() != null ? r.getGrantAmount().toPlainString() : "0.00",
-                r.getDisbursedAmount() != null ? r.getDisbursedAmount().toPlainString() : "0.00",
-                r.getRecipientWallet(),
-                r.getBlockchainTxHash(),
+                HtmlUtils.htmlEscape(r.getReceiptNumber() != null ? r.getReceiptNumber() : ""),
+                HtmlUtils.htmlEscape(r.getDisbursedAt() != null ? r.getDisbursedAt().toString() : "N/A"),
+                HtmlUtils.htmlEscape(r.getStudentName() != null ? r.getStudentName() : ""),
+                HtmlUtils.htmlEscape(r.getStudentEmail() != null ? r.getStudentEmail() : ""),
+                HtmlUtils.htmlEscape(r.getRollNumber() != null ? r.getRollNumber() : "N/A"),
+                HtmlUtils.htmlEscape(r.getDepartment() != null ? r.getDepartment() : "N/A"),
+                HtmlUtils.htmlEscape(r.getScholarshipTitle() != null ? r.getScholarshipTitle() : ""),
+                HtmlUtils.htmlEscape(r.getGrantAmount() != null ? r.getGrantAmount().toPlainString() : "0.00"),
+                HtmlUtils.htmlEscape(r.getDisbursedAmount() != null ? r.getDisbursedAmount().toPlainString() : "0.00"),
+                HtmlUtils.htmlEscape(r.getRecipientWallet() != null ? r.getRecipientWallet() : ""),
+                HtmlUtils.htmlEscape(r.getBlockchainTxHash() != null ? r.getBlockchainTxHash() : ""),
                 r.getBlockNumber() != null ? r.getBlockNumber() : 0L,
-                r.getNetwork(),
-                r.getVerifiedDocumentHash()
+                HtmlUtils.htmlEscape(r.getNetwork() != null ? r.getNetwork() : ""),
+                HtmlUtils.htmlEscape(r.getVerifiedDocumentHash() != null ? r.getVerifiedDocumentHash() : "")
         );
 
         return ResponseEntity.ok(html);

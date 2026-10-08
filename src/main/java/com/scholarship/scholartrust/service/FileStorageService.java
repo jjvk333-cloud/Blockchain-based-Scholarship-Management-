@@ -80,6 +80,9 @@ public class FileStorageService {
             }
         }
 
+        // Magic bytes inspection
+        validateMagicBytes(file, lowerCaseName);
+
         // Sanitize base name
         String safeBaseName = cleanFileName.replaceAll("[^a-zA-Z0-9._-]", "_");
 
@@ -166,5 +169,32 @@ public class FileStorageService {
             return fromCwd;
         }
         return inStorage;
+    }
+
+    private void validateMagicBytes(MultipartFile file, String lowerCaseName) {
+        try (InputStream is = file.getInputStream()) {
+            byte[] header = new byte[8];
+            int read = is.read(header);
+            if (read >= 4) {
+                if (lowerCaseName.endsWith(".pdf")) {
+                    // %PDF
+                    if (header[0] != 0x25 || header[1] != 0x50 || header[2] != 0x44 || header[3] != 0x46) {
+                        throw new IllegalArgumentException("File content does not match genuine PDF magic header signature.");
+                    }
+                } else if (lowerCaseName.endsWith(".jpg") || lowerCaseName.endsWith(".jpeg")) {
+                    // FF D8 FF
+                    if ((header[0] & 0xFF) != 0xFF || (header[1] & 0xFF) != 0xD8 || (header[2] & 0xFF) != 0xFF) {
+                        throw new IllegalArgumentException("File content does not match genuine JPEG magic header signature.");
+                    }
+                } else if (lowerCaseName.endsWith(".png")) {
+                    // 89 50 4E 47
+                    if ((header[0] & 0xFF) != 0x89 || header[1] != 0x50 || header[2] != 0x4E || header[3] != 0x47) {
+                        throw new IllegalArgumentException("File content does not match genuine PNG magic header signature.");
+                    }
+                }
+            }
+        } catch (IOException e) {
+            throw new RuntimeException("Could not verify file magic bytes", e);
+        }
     }
 }
