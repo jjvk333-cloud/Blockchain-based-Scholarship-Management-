@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Student Profile & Identity — ScholarTrust</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    .step-progress {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 24px;
+      position: relative;
+    }
+    .step-item {
+      flex: 1;
+      text-align: center;
+      position: relative;
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: #6c757d;
+    }
+    .step-item.active {
+      color: #0d6efd;
+      font-weight: 700;
+    }
+    .step-item.completed {
+      color: #198754;
+      font-weight: 600;
+    }
+    .step-circle {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: #e9ecef;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 6px;
+      font-weight: bold;
+    }
+    .step-item.active .step-circle {
+      background: #0d6efd;
+      color: white;
+    }
+    .step-item.completed .step-circle {
+      background: #198754;
+      color: white;
+    }
+  </style>
+</head>
+<body>
+  <!-- Navbar -->
+  <nav class="navbar">
+    <div class="brand">🎓 ScholarTrust <span>Student Portal</span></div>
+    <div class="nav-right">
+      <span class="nav-user" id="navUser"></span>
+      <button class="btn-logout" onclick="doLogout()">Logout</button>
+    </div>
+  </nav>
+
+  <div class="page-wrapper">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-section">Navigation</div>
+      <a href="/student/dashboard.html">🏠 Dashboard</a>
+      <a href="/student/profile.html" class="active">👤 Profile & Verification</a>
+      <a href="/student/scholarships.html">📋 Browse Scholarships</a>
+      <a href="/student/my-applications.html">📁 My Applications</a>
+    </aside>
+
+    <!-- Main content -->
+    <main class="main">
+      <h1 class="page-title">Profile & Institutional Verification</h1>
+
+      <!-- Guided Steps -->
+      <div class="card">
+        <div class="step-progress">
+          <div class="step-item completed" id="step1">
+            <div class="step-circle">1</div>
+            <div>Register & Login</div>
+          </div>
+          <div class="step-item" id="step2">
+            <div class="step-circle">2</div>
+            <div>Academic Profile & Wallet</div>
+          </div>
+          <div class="step-item" id="step3">
+            <div class="step-circle">3</div>
+            <div>ID Verification</div>
+          </div>
+          <div class="step-item" id="step4">
+            <div class="step-circle">4</div>
+            <div>Apply for Scholarships</div>
+          </div>
+        </div>
+      </div>
+
+      <div id="pageAlert" class="alert"></div>
+
+      <!-- Section 1: Academic & Wallet Profile -->
+      <div class="card">
+        <div class="card-title">📚 Academic & Wallet Details</div>
+        <form id="profileForm">
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Full Name</label>
+              <input type="text" id="fullName" class="form-control" readonly>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Email</label>
+              <input type="text" id="email" class="form-control" readonly>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Roll Number / Registration No. <span style="color:var(--danger)">*</span></label>
+              <input type="text" id="rollNumber" class="form-control" placeholder="e.g. 2026CS101" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Department / Branch <span style="color:var(--danger)">*</span></label>
+              <input type="text" id="department" class="form-control" placeholder="e.g. Computer Science" required>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Cumulative GPA (0.00 - 10.00) <span style="color:var(--danger)">*</span></label>
+              <input type="number" id="gpa" class="form-control" step="0.01" min="0" max="10" placeholder="e.g. 8.75" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Annual Family Income (₹) <span style="color:var(--danger)">*</span></label>
+              <input type="number" id="annualIncome" class="form-control" min="0" placeholder="e.g. 250000" required>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Phone Number</label>
+              <input type="tel" id="phone" class="form-control" placeholder="e.g. 9876543210">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Ethereum Wallet Address (0x...) <span style="color:var(--danger)">*</span></label>
+              <input type="text" id="walletAddress" class="form-control" placeholder="0x..." required pattern="^0x[a-fA-F0-9]{40}$">
+              <div class="form-hint">Scholarship funds will be directly disbursed to this transparent blockchain wallet address.</div>
+            </div>
+          </div>
+
+          <button type="submit" id="saveProfileBtn" class="btn btn-primary">Save Profile</button>
+        </form>
+      </div>
+
+      <!-- Section 2: Institutional Identity Verification -->
+      <div class="card">
+        <div class="card-title">🆔 Institutional Identity Verification</div>
+        <div id="idStatusCard" style="margin-bottom:16px;"></div>
+
+        <form id="idUploadForm" style="display:none;">
+          <div class="form-group">
+            <label class="form-label">Institutional ID / Roll Number <span style="color:var(--danger)">*</span></label>
+            <input type="text" id="instIdNumber" class="form-control" required placeholder="e.g. 2026CS101">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Upload College ID Card (PDF / Image) <span style="color:var(--danger)">*</span></label>
+            <input type="file" id="idCardFile" class="form-control" accept=".pdf,.jpg,.jpeg,.png" required>
+            <div class="form-hint">SHA-256 cryptographic hash will be calculated to ensure zero document tampering.</div>
+          </div>
+          <button type="submit" id="uploadIdBtn" class="btn btn-primary">Submit ID for Verification</button>
+        </form>
+      </div>
+    </main>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script>
+    if (!requireStudent()) throw new Error('not student');
+    renderNavUser('navUser');
+
+    function doLogout() {
+      API.clearSession();
+      window.location.href = '/student/login.html';
+    }
+
+    async function loadData() {
+      hideAlert('pageAlert');
+      // Load Profile
+      const profRes = await API.get('/api/student/profile').catch(() => null);
+      if (profRes && profRes.success) {
+        const p = profRes.data;
+        document.getElementById('fullName').value = p.fullName || '';
+        document.getElementById('email').value = p.email || '';
+        document.getElementById('rollNumber').value = p.rollNumber || '';
+        document.getElementById('department').value = p.department || '';
+        document.getElementById('gpa').value = p.gpa || '';
+        document.getElementById('annualIncome').value = p.annualFamilyIncome || '';
+        document.getElementById('phone').value = p.phone || '';
+        document.getElementById('walletAddress').value = p.walletAddress || '';
+
+        if (p.walletAddress && p.gpa && p.rollNumber) {
+          document.getElementById('step2').className = 'step-item completed';
+        } else {
+          document.getElementById('step2').className = 'step-item active';
+        }
+      }
+
+      // Load Identity Verification Status
+      const idRes = await API.get('/api/identity/status').catch(() => null);
+      const statusDiv = document.getElementById('idStatusCard');
+      const uploadForm = document.getElementById('idUploadForm');
+
+      if (idRes && idRes.success) {
+        const v = idRes.data;
+        const status = v.status || 'UNVERIFIED';
+
+        if (status === 'VERIFIED') {
+          document.getElementById('step3').className = 'step-item completed';
+          document.getElementById('step4').className = 'step-item active';
+          statusDiv.innerHTML = `
+            <div class="alert alert-success show">
+              <strong>✅ Identity Verified:</strong> Verified by ${escapeHtml(v.verifiedByEmail || 'College Authority')} on ${fmtDate(v.verifiedAt)}.
+              <br><small>Institutional ID: ${escapeHtml(v.institutionalIdNumber)} | SHA-256: <code>${v.idCardSha256 || 'N/A'}</code></small>
+            </div>
+            <p><a href="/student/scholarships.html" class="btn btn-primary">Proceed to Browse Scholarships →</a></p>
+          `;
+          uploadForm.style.display = 'none';
+        } else if (status === 'PENDING') {
+          document.getElementById('step3').className = 'step-item active';
+          statusDiv.innerHTML = `
+            <div class="alert alert-warning show">
+              <strong>⏳ Verification Pending:</strong> Your institutional ID card was uploaded and is currently awaiting administrator verification.
+              <br><small>Institutional ID: ${escapeHtml(v.institutionalIdNumber)} | Document Hash: <code>${v.idCardSha256 || 'N/A'}</code></small>
+            </div>
+          `;
+          uploadForm.style.display = 'none';
+        } else if (status === 'REJECTED') {
+          document.getElementById('step3').className = 'step-item active';
+          statusDiv.innerHTML = `
+            <div class="alert alert-danger show">
+              <strong>❌ Verification Rejected:</strong> ${escapeHtml(v.rejectionReason || 'Please re-upload a clear college ID card.')}
+            </div>
+          `;
+          uploadForm.style.display = 'block';
+          document.getElementById('instIdNumber').value = v.institutionalIdNumber || '';
+        } else {
+          // UNVERIFIED
+          document.getElementById('step3').className = 'step-item active';
+          statusDiv.innerHTML = `
+            <div class="alert alert-warning show">
+              <strong>⚠️ Identity Verification Required:</strong> You must upload a valid college ID card before you can apply for scholarships.
+            </div>
+          `;
+          uploadForm.style.display = 'block';
+          const roll = document.getElementById('rollNumber').value;
+          if (roll) document.getElementById('instIdNumber').value = roll;
+        }
+      }
+    }
+
+    document.getElementById('profileForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      hideAlert('pageAlert');
+      setLoading('saveProfileBtn', true, 'Save Profile');
+
+      const body = {
+        department: document.getElementById('department').value.trim(),
+        gpa: parseFloat(document.getElementById('gpa').value),
+        annualFamilyIncome: parseFloat(document.getElementById('annualIncome').value),
+        phone: document.getElementById('phone').value.trim(),
+        walletAddress: document.getElementById('walletAddress').value.trim()
+      };
+
+      const res = await API.put('/api/student/profile', body).catch(() => null);
+      setLoading('saveProfileBtn', false, 'Save Profile');
+
+      if (!res || !res.success) {
+        showAlert('pageAlert', res?.message || 'Failed to update profile.', 'error');
+        return;
+      }
+
+      showAlert('pageAlert', 'Profile updated successfully!', 'success');
+      loadData();
+    });
+
+    document.getElementById('idUploadForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      hideAlert('pageAlert');
+      const fileInput = document.getElementById('idCardFile');
+      if (!fileInput.files.length) {
+        showAlert('pageAlert', 'Please select an ID card file.', 'error');
+        return;
+      }
+
+      setLoading('uploadIdBtn', true, 'Submit ID for Verification');
+      const fd = new FormData();
+      fd.append('institutionalIdNumber', document.getElementById('instIdNumber').value.trim());
+      fd.append('idCard', fileInput.files[0]);
+
+      const res = await API.postForm('/api/identity/upload', fd).catch(() => null);
+      setLoading('uploadIdBtn', false, 'Submit ID for Verification');
+
+      if (!res || !res.success) {
+        showAlert('pageAlert', res?.message || 'Failed to upload ID document.', 'error');
+        return;
+      }
+
+      showAlert('pageAlert', 'ID card uploaded! Administrator will verify shortly.', 'success');
+      loadData();
+    });
+
+    loadData();
+  </script>
+</body>
+</html>

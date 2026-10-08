@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Identity Verifications — ScholarTrust Admin</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <nav class="navbar">
+    <div class="brand">🛡️ ScholarTrust <span>Admin Panel</span></div>
+    <div class="nav-right">
+      <span class="nav-user" id="navUser"></span>
+      <button class="btn-logout" onclick="doLogout()">Logout</button>
+    </div>
+  </nav>
+
+  <div class="page-wrapper">
+    <aside class="sidebar">
+      <div class="sidebar-section">Admin</div>
+      <a href="/admin/dashboard.html">🏠 Dashboard</a>
+      <a href="/admin/scholarships.html">🎓 Scholarships</a>
+      <a href="/admin/verifications.html" class="active">🆔 Student Verifications</a>
+      <a href="/admin/applications.html">📋 Applications</a>
+      <div class="sidebar-section">Blockchain</div>
+      <a href="/admin/blockchain.html">🔗 Blockchain Status</a>
+    </aside>
+
+    <main class="main">
+      <h1 class="page-title">Institutional Identity Verifications</h1>
+
+      <div id="alert" class="alert"></div>
+
+      <div class="card">
+        <div class="card-title">Pending Student Identity Verifications</div>
+        <div id="content">
+          <div class="empty-state"><div class="empty-icon">⏳</div><p>Loading verifications…</p></div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Review Modal -->
+  <div class="modal-overlay" id="reviewModal">
+    <div class="modal">
+      <button class="modal-close" onclick="closeModal('reviewModal')">✕</button>
+      <div class="modal-title">Review Student Identity</div>
+
+      <div id="modalAlert" class="alert"></div>
+
+      <div class="form-group">
+        <label class="form-label">Student Name</label>
+        <input type="text" id="mStudentName" class="form-control" readonly>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Student Email</label>
+        <input type="text" id="mStudentEmail" class="form-control" readonly>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Institutional ID / Roll Number</label>
+        <input type="text" id="mRollNumber" class="form-control" readonly>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Cryptographic SHA-256 Hash</label>
+        <input type="text" id="mSha256" class="form-control" readonly style="font-family:monospace;font-size:0.85rem;">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Document Download</label>
+        <div id="mDocLink"></div>
+      </div>
+
+      <div class="form-group" id="rejectionReasonGroup">
+        <label class="form-label">Rejection Reason (if rejecting)</label>
+        <textarea id="mRejectionReason" class="form-control" rows="2" placeholder="Explain why identity is invalid or rejected..."></textarea>
+      </div>
+
+      <div style="display:flex;gap:12px;margin-top:16px;">
+        <button class="btn btn-success" id="approveBtn" onclick="submitReview(true)">✅ Approve Identity</button>
+        <button class="btn btn-danger" id="rejectBtn" onclick="submitReview(false)">❌ Reject</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script>
+    if (!requireAdmin()) throw new Error('not admin');
+    renderNavUser('navUser');
+
+    function doLogout() {
+      API.clearSession();
+      window.location.href = '/admin/login.html';
+    }
+
+    let allVerifications = [];
+    let currentReviewId = null;
+
+    async function loadVerifications() {
+      const res = await API.get('/api/identity/admin/all').catch(() => null);
+      if (!res || !res.success) {
+        document.getElementById('content').innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><p>Failed to load verifications.</p></div>';
+        return;
+      }
+
+      allVerifications = res.data || [];
+      if (!allVerifications.length) {
+        document.getElementById('content').innerHTML = '<div class="empty-state"><div class="empty-icon">📄</div><p>No identity verification records found.</p></div>';
+        return;
+      }
+
+      let rows = allVerifications.map(v => {
+        let actionBtn = '';
+        if (v.status === 'PENDING') {
+          actionBtn = `<button class="btn btn-primary btn-sm" onclick="openReviewModal(${v.id})">Review</button>`;
+        } else {
+          actionBtn = `<button class="btn btn-outline btn-sm" onclick="openReviewModal(${v.id})">Details</button>`;
+        }
+
+        return `
+          <tr>
+            <td><strong>${escapeHtml(v.studentName || 'Student')}</strong></td>
+            <td>${escapeHtml(v.studentEmail || '')}</td>
+            <td><code>${escapeHtml(v.institutionalIdNumber || '—')}</code></td>
+            <td>${badgeHtml(v.status)}</td>
+            <td><small><code>${(v.idCardSha256 || '').substring(0, 16)}...</code></small></td>
+            <td>${fmtDate(v.createdAt)}</td>
+            <td>${actionBtn}</td>
+          </tr>
+        `;
+      }).join('');
+
+      document.getElementById('content').innerHTML = `
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Student</th>
+                <th>Email</th>
+                <th>Institutional ID</th>
+                <th>Status</th>
+                <th>SHA-256 Digest</th>
+                <th>Submitted</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    function openReviewModal(id) {
+      const v = allVerifications.find(x => x.id === id);
+      if (!v) return;
+      currentReviewId = id;
+      hideAlert('modalAlert');
+
+      document.getElementById('mStudentName').value = v.studentName || '';
+      document.getElementById('mStudentEmail').value = v.studentEmail || '';
+      document.getElementById('mRollNumber').value = v.institutionalIdNumber || '';
+      document.getElementById('mSha256').value = v.idCardSha256 || 'N/A';
+      document.getElementById('mRejectionReason').value = v.rejectionReason || '';
+
+      const docLink = v.idCardFilePath ? 
+        `<a href="/${escapeHtml(v.idCardFilePath)}" target="_blank" class="btn btn-outline btn-sm">📄 View Stored ID Document</a>` :
+        `<em>No document file attached</em>`;
+      document.getElementById('mDocLink').innerHTML = docLink;
+
+      const isPending = (v.status === 'PENDING');
+      document.getElementById('approveBtn').style.display = isPending ? 'inline-block' : 'none';
+      document.getElementById('rejectBtn').style.display = isPending ? 'inline-block' : 'none';
+      document.getElementById('mRejectionReason').readOnly = !isPending;
+
+      openModal('reviewModal');
+    }
+
+    async function submitReview(approve) {
+      if (!currentReviewId) return;
+      hideAlert('modalAlert');
+
+      const reason = document.getElementById('mRejectionReason').value;
+      if (!approve && !reason.trim()) {
+        showAlert('modalAlert', 'Please enter a rejection reason.', 'warning');
+        return;
+      }
+
+      setLoading(approve ? 'approveBtn' : 'rejectBtn', true);
+      const res = await API.post(`/api/identity/admin/${currentReviewId}/review`, {
+        approve: approve,
+        rejectionReason: reason
+      }).catch(() => null);
+      setLoading(approve ? 'approveBtn' : 'rejectBtn', false, approve ? '✅ Approve Identity' : '❌ Reject');
+
+      if (!res || !res.success) {
+        showAlert('modalAlert', res?.message || 'Review action failed.', 'error');
+        return;
+      }
+
+      closeModal('reviewModal');
+      showAlert('alert', res.message, 'success');
+      loadVerifications();
+    }
+
+    loadVerifications();
+  </script>
+</body>
+</html>
