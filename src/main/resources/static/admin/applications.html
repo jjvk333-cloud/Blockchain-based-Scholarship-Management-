@@ -187,6 +187,10 @@
         <div>
           <div style="font-weight:600;margin-bottom:8px;">📄 Uploaded Documents & Cryptographic Hashes</div>
           ${docs || '<em style="color:var(--muted)">No documents uploaded</em>'}
+        </div>
+        <div style="margin-top:16px;border-top:1px solid var(--border);padding-top:12px;">
+          <div style="font-weight:600;margin-bottom:6px;">⏱️ Lifecycle Audit Timeline</div>
+          <div id="adminTimeline-${app.id}"><small style="color:var(--muted)">Loading lifecycle timeline…</small></div>
         </div>`;
 
       // Action buttons
@@ -209,6 +213,26 @@
       }
 
       openModal('detailModal');
+      loadAdminTimeline(app.id);
+    }
+
+    async function loadAdminTimeline(appId) {
+      const res = await API.get(`/api/audit/timeline/${appId}`).catch(() => null);
+      const container = document.getElementById(`adminTimeline-${appId}`);
+      if (!container) return;
+      if (!res || !res.success || !res.data || !res.data.length) {
+        container.innerHTML = '<small style="color:var(--muted)">No audit events recorded.</small>';
+        return;
+      }
+      let html = '<ul style="padding-left:18px;font-size:0.85rem;margin:0;">';
+      res.data.forEach(evt => {
+        html += `<li style="margin-bottom:6px;">
+          <strong>${escapeHtml(evt.action)}</strong> <span style="color:var(--muted);font-size:0.75rem;">by ${escapeHtml(evt.actorEmail || 'System')} (${fmtDate(evt.timestamp)})</span>
+          <div>${escapeHtml(evt.details || '')}</div>
+        </li>`;
+      });
+      html += '</ul>';
+      container.innerHTML = html;
     }
 
     async function verifyHash(appId) {

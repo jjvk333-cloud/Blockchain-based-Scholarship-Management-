@@ -20,19 +20,32 @@
       <div class="sidebar-section">Admin</div>
       <a href="/admin/dashboard.html">🏠 Dashboard</a>
       <a href="/admin/scholarships.html">🎓 Scholarships</a>
+      <a href="/admin/verifications.html">🆔 Student Verifications</a>
       <a href="/admin/applications.html">📋 Applications</a>
       <div class="sidebar-section">Blockchain</div>
       <a href="/admin/blockchain.html" class="active">🔗 Blockchain Status</a>
     </aside>
 
     <main class="main">
-      <h1 class="page-title">Blockchain Status</h1>
+      <h1 class="page-title">Blockchain Status & Telemetry</h1>
 
       <!-- Network info -->
       <div class="card" id="networkCard">
         <div class="card-title">🌐 Network Information</div>
         <div id="networkInfo">
           <div class="empty-state"><div class="empty-icon">⏳</div><p>Connecting to blockchain…</p></div>
+        </div>
+      </div>
+
+      <!-- Blockchain Transactions & Gas Telemetry -->
+      <div class="card">
+        <div class="card-title">⚡ On-Chain Transaction & Gas Telemetry (Empirical Audit)</div>
+        <p style="font-size:.875rem;color:var(--muted);margin-bottom:12px;">
+          Live telemetry captured from smart contract execution: transaction hashes, confirmation latency, block height, and gas consumption.
+        </p>
+        <button class="btn btn-outline btn-sm" onclick="loadTelemetry()">Refresh Telemetry</button>
+        <div id="telemetryResults" style="margin-top:12px;">
+          <div class="empty-state"><div class="empty-icon">⏳</div><p>Loading telemetry…</p></div>
         </div>
       </div>
 
@@ -174,9 +187,55 @@
             <tr><td style="color:var(--muted);padding:5px 10px;">Overall</td><td>${match ? '<span style="color:var(--success)">✅ PASS</span>' : '<span style="color:var(--danger)">⚠️ MISMATCH</span>'}</td></tr>
           </table>
         </div>`;
+    async function loadTelemetry() {
+      const res = await API.get('/api/audit/telemetry/recent').catch(() => null);
+      if (!res || !res.success || !res.data) {
+        document.getElementById('telemetryResults').innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><p>No telemetry records available.</p></div>';
+        return;
+      }
+
+      const txs = res.data;
+      if (!txs.length) {
+        document.getElementById('telemetryResults').innerHTML = '<div class="empty-state"><div class="empty-icon">📄</div><p>No transactions executed yet.</p></div>';
+        return;
+      }
+
+      let rows = txs.map(t => `
+        <tr>
+          <td><small><code>${escapeHtml((t.txHash || '').substring(0, 18))}...</code></small></td>
+          <td><span class="badge badge-info">${escapeHtml(t.actionType || 'TX')}</span></td>
+          <td>#${t.applicationId || '—'}</td>
+          <td>#${t.blockNumber || '—'}</td>
+          <td><strong>${(t.gasUsed || 0).toLocaleString()}</strong></td>
+          <td>${t.executionLatencyMs != null ? t.executionLatencyMs + ' ms' : '—'}</td>
+          <td>${badgeHtml(t.status || 'SUCCESS')}</td>
+          <td><small>${fmtDate(t.createdAt)}</small></td>
+        </tr>
+      `).join('');
+
+      document.getElementById('telemetryResults').innerHTML = `
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Tx Hash</th>
+                <th>Action Type</th>
+                <th>App ID</th>
+                <th>Block #</th>
+                <th>Gas Used</th>
+                <th>Confirmation Latency</th>
+                <th>Status</th>
+                <th>Timestamp</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      `;
     }
 
     loadNetwork();
+    loadTelemetry();
   </script>
 </body>
 </html>

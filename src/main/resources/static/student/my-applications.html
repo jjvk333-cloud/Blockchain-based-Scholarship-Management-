@@ -119,6 +119,11 @@
           </div>`;
       }
 
+      let receiptBtn = '';
+      if (app.status === 'DISBURSED') {
+        receiptBtn = `<div style="margin-top:12px;"><a href="/api/applications/${app.id}/receipt/html" target="_blank" class="btn btn-outline btn-sm">🧾 View & Print Cryptographic Receipt</a></div>`;
+      }
+
       document.getElementById('detailBody').innerHTML = `
         <div style="margin-bottom:12px;">
           <strong>Status:</strong> ${badgeHtml(app.status)} &nbsp;
@@ -132,9 +137,34 @@
           <div style="font-weight:600;margin-bottom:8px;">📄 Documents & Hashes</div>
           ${docs || '<span style="color:var(--muted)">No documents uploaded.</span>'}
         </div>
-        ${disburse}`;
+        ${disburse}
+        ${receiptBtn}
+        <div style="margin-top:16px;border-top:1px solid var(--border);padding-top:12px;">
+          <div style="font-weight:600;margin-bottom:6px;">⏱️ Lifecycle Audit Timeline</div>
+          <div id="timeline-${app.id}"><small style="color:var(--muted)">Loading lifecycle timeline…</small></div>
+        </div>`;
 
       openModal('detailModal');
+      loadTimeline(app.id);
+    }
+
+    async function loadTimeline(appId) {
+      const res = await API.get(`/api/audit/timeline/${appId}`).catch(() => null);
+      const container = document.getElementById(`timeline-${appId}`);
+      if (!container) return;
+      if (!res || !res.success || !res.data || !res.data.length) {
+        container.innerHTML = '<small style="color:var(--muted)">No audit events recorded.</small>';
+        return;
+      }
+      let html = '<ul style="padding-left:18px;font-size:0.85rem;margin:0;">';
+      res.data.forEach(evt => {
+        html += `<li style="margin-bottom:6px;">
+          <strong>${escapeHtml(evt.action)}</strong> <span style="color:var(--muted);font-size:0.75rem;">(${fmtDate(evt.timestamp)})</span>
+          <div>${escapeHtml(evt.details || '')}</div>
+        </li>`;
+      });
+      html += '</ul>';
+      container.innerHTML = html;
     }
 
     async function verifyHash(appId, docId) {
