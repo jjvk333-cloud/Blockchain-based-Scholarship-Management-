@@ -1,23 +1,41 @@
 @echo off
+setlocal enabledelayedexpansion
 title ScholarTrust System Launcher
 echo ============================================================
-echo Launching ScholarTrust Blockchain Scholarship Platform...
+echo   ScholarTrust Blockchain Scholarship Platform Launcher
 echo ============================================================
-echo [1/3] Starting Ganache node in separate window...
-start "Ganache Node" cmd /k "npx ganache --wallet.deterministic --server.port 8545"
 
-echo Waiting 6 seconds for Ganache to initialize...
-timeout /t 6 /nobreak >nul
+cd /d "%~dp0"
 
-echo [2/3] Deploying smart contract...
+echo [1/3] Checking & Starting Ganache node...
+start "Ganache Node" cmd /k "cd /d ""%~dp0"" && npx ganache --wallet.deterministic --server.port 8545 --chain.chainId 1337"
+
+echo Polling Ganache RPC on http://127.0.0.1:8545 until responsive...
+:poll_ganache
+timeout /t 1 /nobreak >nul
+powershell -Command "try { $r = Invoke-WebRequest -Uri 'http://127.0.0.1:8545' -Method POST -Body '{\"jsonrpc\":\"2.0\",\"method\":\"eth_blockNumber\",\"params\":[],\"id\":1}' -ContentType 'application/json' -TimeoutSec 1; exit 0 } catch { exit 1 }"
+if %errorlevel% neq 0 (
+    echo   Waiting for Ganache RPC...
+    goto poll_ganache
+)
+echo Ganache RPC is ONLINE!
+
+echo.
+echo [2/3] Deploying smart contract and auto-syncing properties...
 node contracts/deploy.js
+if %errorlevel% neq 0 (
+    echo Smart contract deployment failed!
+    pause
+    exit /b %errorlevel%
+)
 
+echo.
 echo [3/3] Starting Spring Boot backend in separate window...
-start "ScholarTrust Backend" cmd /k "mvn spring-boot:run"
+start "ScholarTrust Backend" cmd /k "cd /d ""%~dp0"" && mvn spring-boot:run"
 
 echo ============================================================
 echo ScholarTrust is launching!
-echo Once the backend finishes starting, visit:
+echo Once Spring Boot finishes compiling and starts, visit:
 echo http://localhost:8080
 echo ============================================================
 pause
