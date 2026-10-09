@@ -85,7 +85,19 @@ async function main() {
         deployedAt: new Date().toISOString()
     };
     fs.writeFileSync(path.resolve(__dirname, 'deployment.json'), JSON.stringify(deploymentInfo, null, 2));
-    console.log("Saved deployment metadata to contracts/deployment.json\n");
+    console.log("Saved deployment metadata to contracts/deployment.json");
+
+    // Automatically synchronize application.properties
+    const appPropsPath = path.resolve(__dirname, '../src/main/resources/application.properties');
+    if (fs.existsSync(appPropsPath)) {
+        let propsContent = fs.readFileSync(appPropsPath, 'utf8');
+        propsContent = propsContent.replace(
+            /blockchain\.contract-address=\$\{BLOCKCHAIN_CONTRACT_ADDRESS:0x[a-fA-F0-9]{40}\}/,
+            `blockchain.contract-address=\${BLOCKCHAIN_CONTRACT_ADDRESS:${contractAddress}}`
+        );
+        fs.writeFileSync(appPropsPath, propsContent, 'utf8');
+        console.log(`Synchronized application.properties with contract address: ${contractAddress}\n`);
+    }
 }
 
 main().catch(err => {

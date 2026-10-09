@@ -1,7 +1,7 @@
 {
   "network": "ganache-local",
   "rpcUrl": "http://127.0.0.1:8545",
-  "contractAddress": "0xe982E462b094850F12AF94d21D470e21bE9D0E9C",
+  "contractAddress": "0x5b1869D9A4C187F2EAa108f3062412ecf0526b24",
   "adminAddress": "0x90F8bf6A479f320ead074411a4B0e7944Ea8c9C1",
-  "deployedAt": "2026-10-08T16:21:45.120Z"
+  "deployedAt": "2026-10-09T16:27:20.143Z"
 }
