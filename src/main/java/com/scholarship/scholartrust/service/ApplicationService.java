@@ -41,6 +41,7 @@ public class ApplicationService {
     private final BlockchainService blockchainService;
     private final ScholarshipService scholarshipService;
     private final IdentityVerificationService identityVerificationService;
+    private final AuditEventService auditEventService;
 
     public ApplicationService(ApplicationRepository applicationRepository,
                               ScholarshipRepository scholarshipRepository,
@@ -51,7 +52,8 @@ public class ApplicationService {
                               FileStorageService fileStorageService,
                               BlockchainService blockchainService,
                               ScholarshipService scholarshipService,
-                              IdentityVerificationService identityVerificationService) {
+                              IdentityVerificationService identityVerificationService,
+                              AuditEventService auditEventService) {
         this.applicationRepository = applicationRepository;
         this.scholarshipRepository = scholarshipRepository;
         this.userRepository = userRepository;
@@ -62,6 +64,7 @@ public class ApplicationService {
         this.blockchainService = blockchainService;
         this.scholarshipService = scholarshipService;
         this.identityVerificationService = identityVerificationService;
+        this.auditEventService = auditEventService;
     }
 
     @Transactional
@@ -147,6 +150,14 @@ public class ApplicationService {
             applicationRepository.save(savedApp);
         } catch (Exception e) {
             // Log blockchain failure; DB application submission is preserved
+        }
+
+        if (auditEventService != null) {
+            auditEventService.recordEvent(
+                    savedApp.getId(), "APPLICATION_SUBMITTED", student.getEmail(), "STUDENT",
+                    null, ApplicationStatus.PENDING.name(), savedApp.getBlockchainTxHash(),
+                    "Application submitted with documents. Marksheet hash anchored on blockchain."
+            );
         }
 
         return mapToResponse(savedApp);
@@ -292,6 +303,15 @@ public class ApplicationService {
         }
 
         Application saved = applicationRepository.save(application);
+
+        if (auditEventService != null) {
+            auditEventService.recordEvent(
+                    applicationId, "STATUS_CHANGED", "admin", "ADMIN",
+                    null, newStatus.name(), null,
+                    "Application status changed to " + newStatus.name() + (remarks != null ? ". Remarks: " + remarks : "")
+            );
+        }
+
         return mapToResponse(saved);
     }
 
@@ -365,6 +385,14 @@ public class ApplicationService {
         application.setStatus(ApplicationStatus.DISBURSED);
         application.setBlockchainTxHash(txHash);
         applicationRepository.save(application);
+
+        if (auditEventService != null) {
+            auditEventService.recordEvent(
+                    applicationId, "SCHOLARSHIP_DISBURSED", "admin", "ADMIN",
+                    ApplicationStatus.APPROVED.name(), ApplicationStatus.DISBURSED.name(), txHash,
+                    "Disbursed amount ₹" + grantAmount + " to wallet " + walletAddr + " on block #" + blockNumber
+            );
+        }
 
         return mapToResponse(application);
     }

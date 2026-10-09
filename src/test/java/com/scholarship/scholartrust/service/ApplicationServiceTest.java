@@ -61,6 +61,9 @@ class ApplicationServiceTest {
     @Mock
     private IdentityVerificationService identityVerificationService;
 
+    @Mock
+    private AuditEventService auditEventService;
+
     private ApplicationService applicationService;
 
     @BeforeEach
@@ -75,7 +78,8 @@ class ApplicationServiceTest {
                 fileStorageService,
                 blockchainService,
                 scholarshipService,
-                identityVerificationService
+                identityVerificationService,
+                auditEventService
         );
     }
 

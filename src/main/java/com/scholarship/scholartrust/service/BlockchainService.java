@@ -43,17 +43,37 @@ public class BlockchainService {
     private final Credentials credentials;
     private final TransactionManager txManager;
     private final TransactionReceiptProcessor receiptProcessor;
+    private final com.scholarship.scholartrust.repository.BlockchainTransactionRepository txRepository;
 
     public BlockchainService(@Value("${blockchain.rpc-url:http://127.0.0.1:8545}") String rpcUrl,
                              @Value("${blockchain.contract-address}") String contractAddress,
-                             @Value("${blockchain.admin-private-key}") String privateKey) {
+                             @Value("${blockchain.admin-private-key}") String privateKey,
+                             com.scholarship.scholartrust.repository.BlockchainTransactionRepository txRepository) {
         this.web3j = Web3j.build(new HttpService(rpcUrl));
         this.contractAddress = contractAddress;
         this.credentials = Credentials.create(privateKey);
         this.txManager = new RawTransactionManager(web3j, credentials);
         this.receiptProcessor = new PollingTransactionReceiptProcessor(web3j, 1000, 40);
+        this.txRepository = txRepository;
         log.info("Initialized Web3j connecting to {} with Admin Account {}", rpcUrl, credentials.getAddress());
         log.info("Target ScholarshipLedger contract address: {}", contractAddress);
+    }
+
+
+    private void recordTxTelemetry(String txHash, String actionType, Long applicationId, TransactionReceipt receipt, long latencyMs) {
+        if (txRepository == null || receipt == null) return;
+        try {
+            Long blockNum = receipt.getBlockNumber() != null ? receipt.getBlockNumber().longValue() : null;
+            Long gasUsed = receipt.getGasUsed() != null ? receipt.getGasUsed().longValue() : null;
+            String status = receipt.isStatusOK() ? "SUCCESS" : "REVERTED";
+            com.scholarship.scholartrust.entity.BlockchainTransaction tx = new com.scholarship.scholartrust.entity.BlockchainTransaction(
+                    txHash, actionType, applicationId, blockNum, gasUsed, latencyMs,
+                    credentials.getAddress(), contractAddress, status
+            );
+            txRepository.save(tx);
+        } catch (Exception ex) {
+            log.warn("Could not persist blockchain transaction telemetry: {}", ex.getMessage());
+        }
     }
 
     public String recordApplicationOnChain(Long applicationId, String studentWallet, Long scholarshipId, String docHash) {
@@ -73,11 +93,15 @@ public class BlockchainService {
             BigInteger gasLimit = BigInteger.valueOf(300000);
             BigInteger gasPrice = web3j.ethGasPrice().send().getGasPrice();
 
+            long startTime = System.currentTimeMillis();
             String txHash = txManager.sendTransaction(gasPrice, gasLimit, contractAddress, encoded, BigInteger.ZERO).getTransactionHash();
             TransactionReceipt receipt = receiptProcessor.waitForTransactionReceipt(txHash);
+            long latencyMs = System.currentTimeMillis() - startTime;
 
-            log.info("Blockchain: Application #{} recorded on-chain. TxHash: {}, Block: {}",
-                    applicationId, receipt.getTransactionHash(), receipt.getBlockNumber());
+            recordTxTelemetry(receipt.getTransactionHash(), "RECORD_APPLICATION", applicationId, receipt, latencyMs);
+
+            log.info("Blockchain: Application #{} recorded on-chain. TxHash: {}, Block: {}, Latency: {}ms",
+                    applicationId, receipt.getTransactionHash(), receipt.getBlockNumber(), latencyMs);
             return receipt.getTransactionHash();
         } catch (Exception ex) {
             log.error("Failed to record application on blockchain", ex);
@@ -100,11 +124,15 @@ public class BlockchainService {
             BigInteger gasLimit = BigInteger.valueOf(150000);
             BigInteger gasPrice = web3j.ethGasPrice().send().getGasPrice();
 
+            long startTime = System.currentTimeMillis();
             String txHash = txManager.sendTransaction(gasPrice, gasLimit, contractAddress, encoded, BigInteger.ZERO).getTransactionHash();
             TransactionReceipt receipt = receiptProcessor.waitForTransactionReceipt(txHash);
+            long latencyMs = System.currentTimeMillis() - startTime;
 
-            log.info("Blockchain: Application #{} status updated to ordinal {} on-chain. TxHash: {}",
-                    applicationId, statusOrdinal, receipt.getTransactionHash());
+            recordTxTelemetry(receipt.getTransactionHash(), "UPDATE_STATUS_" + statusOrdinal, applicationId, receipt, latencyMs);
+
+            log.info("Blockchain: Application #{} status updated to ordinal {} on-chain. TxHash: {}, Latency: {}ms",
+                    applicationId, statusOrdinal, receipt.getTransactionHash(), latencyMs);
             return receipt.getTransactionHash();
         } catch (Exception ex) {
             log.error("Failed to update status on blockchain", ex);
@@ -130,11 +158,15 @@ public class BlockchainService {
             BigInteger gasLimit = BigInteger.valueOf(350000);
             BigInteger gasPrice = web3j.ethGasPrice().send().getGasPrice();
 
+            long startTime = System.currentTimeMillis();
             String txHash = txManager.sendTransaction(gasPrice, gasLimit, contractAddress, encoded, BigInteger.ZERO).getTransactionHash();
             TransactionReceipt receipt = receiptProcessor.waitForTransactionReceipt(txHash);
+            long latencyMs = System.currentTimeMillis() - startTime;
 
-            log.info("Blockchain: Funds disbursed for App #{} to {}. TxHash: {}, Block: {}",
-                    applicationId, studentWallet, receipt.getTransactionHash(), receipt.getBlockNumber());
+            recordTxTelemetry(receipt.getTransactionHash(), "DISBURSE_SCHOLARSHIP", applicationId, receipt, latencyMs);
+
+            log.info("Blockchain: Funds disbursed for App #{} to {}. TxHash: {}, Block: {}, Latency: {}ms",
+                    applicationId, studentWallet, receipt.getTransactionHash(), receipt.getBlockNumber(), latencyMs);
             return receipt;
         } catch (Exception ex) {
             log.error("Failed to disburse scholarship on blockchain", ex);
