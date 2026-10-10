@@ -21,14 +21,14 @@ $studAuth = Invoke-RestMethod -Uri "http://localhost:8080/api/auth/login" -Metho
 $studToken = $studAuth.data.token
 
 # Create fresh files
-"Official Semester Grade Report - GPA 8.75 - Verified" | Set-Content "grade_sheet.txt" -Encoding UTF8
-"Tehsildar Certified Income Proof - Rs 2,50,000" | Set-Content "income_cert.txt" -Encoding UTF8
+[System.IO.File]::WriteAllBytes("grade_sheet.pdf", [System.Text.Encoding]::UTF8.GetBytes("%PDF-1.4 Official Semester Grade Report - GPA 8.75 - Verified"))
+[System.IO.File]::WriteAllBytes("income_cert.pdf", [System.Text.Encoding]::UTF8.GetBytes("%PDF-1.4 Tehsildar Certified Income Proof - Rs 2,50,000"))
 
 $curlOut = & curl.exe -s -X POST "http://localhost:8080/api/applications/apply" `
   -H "Authorization: Bearer $studToken" `
   -F "scholarshipId=$schId" `
-  -F "marksheet=@grade_sheet.txt;type=text/plain" `
-  -F "incomeCertificate=@income_cert.txt;type=text/plain"
+  -F "marksheet=@grade_sheet.pdf;type=application/pdf" `
+  -F "incomeCertificate=@income_cert.pdf;type=application/pdf"
 
 $appJson = $curlOut | ConvertFrom-Json
 $appId = $appJson.data.id

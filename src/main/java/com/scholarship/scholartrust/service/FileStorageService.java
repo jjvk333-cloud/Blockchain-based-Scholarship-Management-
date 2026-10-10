@@ -27,12 +27,11 @@ public class FileStorageService {
 
     private final Path fileStorageLocation;
     private static final long MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
-    private static final List<String> ALLOWED_EXTENSIONS = List.of(".pdf", ".jpg", ".jpeg", ".png", ".txt");
+    private static final List<String> ALLOWED_EXTENSIONS = List.of(".pdf", ".jpg", ".jpeg", ".png");
     private static final List<String> ALLOWED_CONTENT_TYPES = List.of(
             "application/pdf",
             "image/jpeg",
-            "image/png",
-            "text/plain"
+            "image/png"
     );
 
     public FileStorageService(@Value("${file.upload-dir:uploads/documents}") String uploadDir) {

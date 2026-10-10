@@ -122,12 +122,14 @@
       }
 
       const rows = apps.map(a => {
-        const schTitle = a.scholarshipName || a.scholarshipTitle || '—';
+        const schTitle = escapeHtml(a.scholarshipName || a.scholarshipTitle || '—');
+        const studentName = escapeHtml(a.studentName || '—');
+        const studentEmail = escapeHtml(a.studentEmail || '');
         const hasChain = !!a.blockchainTxHash;
         return `
         <tr>
           <td>#${a.id}</td>
-          <td><strong>${a.studentName || '—'}</strong><br><small style="color:var(--muted)">${a.studentEmail || ''}</small></td>
+          <td><strong>${studentName}</strong><br><small style="color:var(--muted)">${studentEmail}</small></td>
           <td>${schTitle}</td>
           <td>${badgeHtml(a.status)}</td>
           <td>${fmtDate(a.appliedAt)}</td>
@@ -154,10 +156,10 @@
       const docs = (app.documents || []).map(d => `
         <div style="margin-bottom:12px;background:#f8fafc;padding:10px;border-radius:6px;border:1px solid var(--border);">
           <div style="display:flex;justify-content:space-between;align-items:center;">
-            <strong style="font-size:.85rem;">${d.documentType}: ${d.fileName}</strong>
-            <a href="${d.downloadUrl || '#'}" target="_blank" class="btn btn-outline btn-sm">Download</a>
+            <strong style="font-size:.85rem;">${escapeHtml(d.documentType)}: ${escapeHtml(d.fileName)}</strong>
+            <a href="${escapeHtml(d.downloadUrl || '#')}" target="_blank" class="btn btn-outline btn-sm">Download</a>
           </div>
-          <div class="hash-box" style="margin-top:6px;">${d.sha256Hash || '—'}</div>
+          <div class="hash-box" style="margin-top:6px;">${escapeHtml(d.sha256Hash || '—')}</div>
           <div style="margin-top:6px;display:flex;align-items:center;gap:8px;">
             <button class="btn btn-info btn-sm" onclick="verifyHash(${app.id})">
               🔍 Verify SHA-256 Hash
@@ -167,18 +169,18 @@
         </div>`).join('');
 
       const chain = app.blockchainTxHash
-        ? `<div class="hash-box">${app.blockchainTxHash}</div>`
+        ? `<div class="hash-box">${escapeHtml(app.blockchainTxHash)}</div>`
         : '<em style="color:var(--muted)">Not yet recorded on blockchain</em>';
 
       document.getElementById('modalBody').innerHTML = `
         <table style="font-size:.875rem;width:100%;margin-bottom:14px;">
-          <tr><td style="color:var(--muted);padding:4px 0;width:130px;">Scholarship</td><td><strong>${app.scholarshipName || app.scholarshipTitle || '—'}</strong></td></tr>
-          <tr><td style="color:var(--muted);padding:4px 0;">Student Email</td><td>${app.studentEmail || '—'}</td></tr>
+          <tr><td style="color:var(--muted);padding:4px 0;width:130px;">Scholarship</td><td><strong>${escapeHtml(app.scholarshipName || app.scholarshipTitle || '—')}</strong></td></tr>
+          <tr><td style="color:var(--muted);padding:4px 0;">Student Email</td><td>${escapeHtml(app.studentEmail || '—')}</td></tr>
           <tr><td style="color:var(--muted);padding:4px 0;">Status</td><td>${badgeHtml(app.status)}</td></tr>
           <tr><td style="color:var(--muted);padding:4px 0;">Applied On</td><td>${fmtDate(app.appliedAt)}</td></tr>
-          <tr><td style="color:var(--muted);padding:4px 0;">GPA</td><td>${app.gpa != null ? app.gpa : '—'}</td></tr>
+          <tr><td style="color:var(--muted);padding:4px 0;">GPA</td><td>${app.gpa != null ? escapeHtml(app.gpa) : '—'}</td></tr>
           <tr><td style="color:var(--muted);padding:4px 0;">Annual Income</td><td>${fmtMoney(app.annualFamilyIncome || app.annualIncome)}</td></tr>
-          <tr><td style="color:var(--muted);padding:4px 0;">Student Wallet</td><td><code>${app.walletAddress || '—'}</code></td></tr>
+          <tr><td style="color:var(--muted);padding:4px 0;">Student Wallet</td><td><code>${escapeHtml(app.walletAddress || '—')}</code></td></tr>
         </table>
         <div style="margin-bottom:12px;">
           <div style="font-weight:600;margin-bottom:6px;">🔗 Blockchain Transaction Hash</div>

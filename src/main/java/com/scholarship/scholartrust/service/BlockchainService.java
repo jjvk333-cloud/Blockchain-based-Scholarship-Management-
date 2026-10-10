@@ -250,14 +250,17 @@ public class BlockchainService {
             ).send();
 
             if (ethCall.hasError()) {
-                log.warn("getApplication EthCall error: {}", ethCall.getError().getMessage());
-                return Collections.emptyList();
+                String errMsg = ethCall.getError().getMessage();
+                log.warn("getApplication EthCall error for appId {}: {}", applicationId, errMsg);
+                throw new com.scholarship.scholartrust.exception.BlockchainRpcException("Blockchain RPC call error for application " + applicationId + ": " + errMsg);
             }
 
             return FunctionReturnDecoder.decode(ethCall.getValue(), function.getOutputParameters());
+        } catch (com.scholarship.scholartrust.exception.BlockchainRpcException ex) {
+            throw ex;
         } catch (Exception ex) {
-            log.error("Failed to query getApplication from blockchain", ex);
-            return Collections.emptyList();
+            log.error("Failed to query getApplication from blockchain for appId: " + applicationId, ex);
+            throw new com.scholarship.scholartrust.exception.BlockchainRpcException("Failed to query application " + applicationId + " from blockchain node: " + ex.getMessage(), ex);
         }
     }
 
@@ -282,14 +285,17 @@ public class BlockchainService {
             ).send();
 
             if (ethCall.hasError()) {
-                log.warn("getDisbursement EthCall error: {}", ethCall.getError().getMessage());
-                return Collections.emptyList();
+                String errMsg = ethCall.getError().getMessage();
+                log.warn("getDisbursement EthCall error for appId {}: {}", applicationId, errMsg);
+                throw new com.scholarship.scholartrust.exception.BlockchainRpcException("Blockchain RPC call error for disbursement " + applicationId + ": " + errMsg);
             }
 
             return FunctionReturnDecoder.decode(ethCall.getValue(), function.getOutputParameters());
+        } catch (com.scholarship.scholartrust.exception.BlockchainRpcException ex) {
+            throw ex;
         } catch (Exception ex) {
-            log.error("Failed to query getDisbursement from blockchain", ex);
-            return Collections.emptyList();
+            log.error("Failed to query getDisbursement from blockchain for appId: " + applicationId, ex);
+            throw new com.scholarship.scholartrust.exception.BlockchainRpcException("Failed to query disbursement " + applicationId + " from blockchain node: " + ex.getMessage(), ex);
         }
     }
 
@@ -326,5 +332,17 @@ public class BlockchainService {
 
     public String getAdminAddress() {
         return credentials.getAddress();
+    }
+
+    public TransactionReceipt getTransactionReceipt(String txHash) {
+        if (txHash == null || txHash.isBlank()) return null;
+        try {
+            org.web3j.protocol.core.methods.response.EthGetTransactionReceipt response =
+                    web3j.ethGetTransactionReceipt(txHash).send();
+            return response.getTransactionReceipt().orElse(null);
+        } catch (Exception e) {
+            log.warn("Could not query transaction receipt for {}: {}", txHash, e.getMessage());
+            return null;
+        }
     }
 }

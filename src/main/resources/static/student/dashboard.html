@@ -83,7 +83,7 @@
 
       let rows = recent.map(a => `
         <tr>
-          <td><strong>${a.scholarshipName || 'Scholarship'}</strong></td>
+          <td><strong>${escapeHtml(a.scholarshipName || 'Scholarship')}</strong></td>
           <td>${badgeHtml(a.status)}</td>
           <td>${fmtDate(a.appliedAt)}</td>
           <td>${a.blockchainTxHash ? '✅ On-chain' : '⏳ Pending'}</td>

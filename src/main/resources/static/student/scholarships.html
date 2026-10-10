@@ -124,15 +124,15 @@
         const safeName = name.replace(/'/g, "\\'");
         return `
         <div class="sch-card">
-          <h3>${name}</h3>
+          <h3>${escapeHtml(name)}</h3>
           <div class="sch-amount">${fmtMoney(amount)}</div>
           <div class="sch-meta">
             <span>📅 Deadline: ${fmtDate(s.deadline)}</span>
             ${badgeHtml(s.active ? 'ACTIVE' : 'INACTIVE')}
           </div>
-          <div class="sch-desc">${s.description || ''}</div>
+          <div class="sch-desc">${escapeHtml(s.description || '')}</div>
           <div class="sch-meta">
-            ${s.minGpa ? '<span>📊 Min GPA: ' + s.minGpa + '</span>' : ''}
+            ${s.minGpa ? '<span>📊 Min GPA: ' + escapeHtml(s.minGpa) + '</span>' : ''}
             ${maxIncome ? '<span>💰 Max Income: ' + fmtMoney(maxIncome) + '</span>' : ''}
           </div>
           <div class="sch-footer">

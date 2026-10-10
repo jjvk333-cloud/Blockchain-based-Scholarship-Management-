@@ -89,8 +89,8 @@
         const rows = recent.map(a => `
           <tr>
             <td>${a.id}</td>
-            <td><strong>${a.studentName || '—'}</strong></td>
-            <td>${a.scholarshipName || '—'}</td>
+            <td><strong>${escapeHtml(a.studentName || '—')}</strong></td>
+            <td>${escapeHtml(a.scholarshipName || '—')}</td>
             <td>${badgeHtml(a.status)}</td>
             <td>${fmtDate(a.appliedAt)}</td>
             <td><a href="/admin/applications.html" class="btn btn-outline btn-sm">Manage</a></td>

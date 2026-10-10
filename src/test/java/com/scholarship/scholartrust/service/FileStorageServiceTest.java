@@ -47,8 +47,8 @@ class FileStorageServiceTest {
     @DisplayName("Should calculate consistent SHA-256 hash for identical file contents")
     void testCalculateSha256() {
         byte[] content = "ScholarTrust Immutable Test Content".getBytes();
-        MockMultipartFile file1 = new MockMultipartFile("f1", "doc1.txt", "text/plain", content);
-        MockMultipartFile file2 = new MockMultipartFile("f2", "doc2.txt", "text/plain", content);
+        MockMultipartFile file1 = new MockMultipartFile("f1", "doc1.pdf", "application/pdf", content);
+        MockMultipartFile file2 = new MockMultipartFile("f2", "doc2.pdf", "application/pdf", content);
 
         String hash1 = fileStorageService.calculateSha256(file1);
         String hash2 = fileStorageService.calculateSha256(file2);

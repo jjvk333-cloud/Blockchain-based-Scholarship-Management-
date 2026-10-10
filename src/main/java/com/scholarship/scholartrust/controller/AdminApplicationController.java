@@ -64,4 +64,10 @@ public class AdminApplicationController {
         BlockchainAuditResponse response = applicationService.auditApplicationOnChain(id);
         return ResponseEntity.ok(ApiResponse.success("Blockchain ledger audit report generated", response));
     }
+
+    @PostMapping("/{id}/reconcile")
+    public ResponseEntity<ApiResponse<ApplicationResponse>> reconcileApplication(@PathVariable Long id) {
+        ApplicationResponse response = applicationService.reconcileApplicationBlockchainState(id);
+        return ResponseEntity.ok(ApiResponse.success("Application blockchain state reconciled successfully", response));
+    }
 }

@@ -1,9 +1,9 @@
 $utf8 = New-Object System.Text.UTF8Encoding($false)
 
 Write-Host "=== 1. Preparing Sample Student Documents ===" -ForegroundColor Cyan
-"B.Tech Computer Science 8th Sem Marksheet - GPA: 8.75 - Verified by University" | Set-Content "sample_marksheet.txt" -Encoding UTF8
-"Annual Family Income Certificate - Gross Income: Rs 2,50,000 - Tehsildar Office" | Set-Content "sample_income.txt" -Encoding UTF8
-"National Identity Proof - Aadhaar / Student Card ID" | Set-Content "sample_id.txt" -Encoding UTF8
+[System.IO.File]::WriteAllBytes("sample_marksheet.pdf", [System.Text.Encoding]::UTF8.GetBytes("%PDF-1.4 B.Tech Computer Science 8th Sem Marksheet - GPA: 8.75 - Verified by University"))
+[System.IO.File]::WriteAllBytes("sample_income.pdf", [System.Text.Encoding]::UTF8.GetBytes("%PDF-1.4 Annual Family Income Certificate - Gross Income: Rs 2,50,000 - Tehsildar Office"))
+[System.IO.File]::WriteAllBytes("sample_id.pdf", [System.Text.Encoding]::UTF8.GetBytes("%PDF-1.4 National Identity Proof - Aadhaar / Student Card ID"))
 
 Write-Host "`n=== 2. Student Login ===" -ForegroundColor Cyan
 $studLogin = @{
@@ -24,9 +24,9 @@ Write-Host "`n=== 3. Submitting Multipart Application with Documents ===" -Foreg
 $curlOutput = & curl.exe -s -X POST "http://localhost:8080/api/applications/apply" `
   -H "Authorization: Bearer $studToken" `
   -F "scholarshipId=$schId" `
-  -F "marksheet=@sample_marksheet.txt;type=text/plain" `
-  -F "incomeCertificate=@sample_income.txt;type=text/plain" `
-  -F "idProof=@sample_id.txt;type=text/plain"
+  -F "marksheet=@sample_marksheet.pdf;type=application/pdf" `
+  -F "incomeCertificate=@sample_income.pdf;type=application/pdf" `
+  -F "idProof=@sample_id.pdf;type=application/pdf"
 
 $appJson = $curlOutput | ConvertFrom-Json
 if ($appJson.success) {
@@ -61,6 +61,6 @@ Write-Host "`n=== 5. Duplicate Application Prevention Test ===" -ForegroundColor
 $dupOutput = & curl.exe -s -X POST "http://localhost:8080/api/applications/apply" `
   -H "Authorization: Bearer $studToken" `
   -F "scholarshipId=$schId" `
-  -F "marksheet=@sample_marksheet.txt;type=text/plain"
+  -F "marksheet=@sample_marksheet.pdf;type=application/pdf"
 $dupJson = $dupOutput | ConvertFrom-Json
 Write-Host "Duplicate Submission Response: $($dupJson.message)" -ForegroundColor Yellow

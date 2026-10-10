@@ -446,29 +446,35 @@ public class ApplicationService {
         BigDecimal grantAmount = (amount != null && amount.compareTo(BigDecimal.ZERO) > 0)
                 ? amount : application.getScholarship().getGrantAmount();
 
-        StudentProfile profile = studentProfileRepository.findByUser(application.getStudent()).orElse(null);
-        String walletAddr = null;
-        try {
-            List<Type> chainData = blockchainService.getApplicationFromChain(applicationId);
-            if (chainData != null && chainData.size() > 1) {
-                String chainAddr = ((Address) chainData.get(1)).getValue();
-                if (chainAddr != null && !chainAddr.equalsIgnoreCase("0x0000000000000000000000000000000000000000")) {
-                    walletAddr = chainAddr;
-                }
-            }
-        } catch (Exception ignored) {}
-
-        if (walletAddr == null) {
-            if (recipientWallet != null && !recipientWallet.isBlank()) {
-                walletAddr = recipientWallet.trim();
-            } else if (profile != null && profile.getWalletAddress() != null && !profile.getWalletAddress().isBlank()) {
+        // DEF-18: Strict Recipient Wallet Resolution
+        // Funds must strictly be disbursed to the student's wallet recorded at submission time (application.submittedWalletAddress)
+        // and anchored on-chain. Arbitrary override or mutable profile address fallbacks are strictly rejected.
+        String walletAddr = application.getSubmittedWalletAddress();
+        if (walletAddr == null || walletAddr.isBlank()) {
+            StudentProfile profile = studentProfileRepository.findByUser(application.getStudent()).orElse(null);
+            if (profile != null && profile.getWalletAddress() != null && !profile.getWalletAddress().isBlank()) {
                 walletAddr = profile.getWalletAddress().trim();
             }
         }
 
-        // Strict Validation: Remove silent fallback wallet. Enforce 0x + 40 hex chars
         if (walletAddr == null || !walletAddr.matches("^0x[a-fA-F0-9]{40}$")) {
             throw new IllegalArgumentException("Disbursement rejected: Student does not have a registered valid Ethereum wallet address (must be 0x followed by 40 hex characters).");
+        }
+
+        // Verify on-chain student wallet matches submitted wallet if record exists on-chain
+        try {
+            List<Type> chainData = blockchainService.getApplicationFromChain(applicationId);
+            if (chainData != null && chainData.size() > 1 && ((Bool) chainData.get(6)).getValue()) {
+                String chainAddr = ((Address) chainData.get(1)).getValue();
+                if (chainAddr != null && !chainAddr.equalsIgnoreCase("0x0000000000000000000000000000000000000000")) {
+                    if (!chainAddr.equalsIgnoreCase(walletAddr)) {
+                        throw new IllegalStateException("Disbursement rejected: Recipient wallet " + walletAddr +
+                                " does not match on-chain anchored wallet " + chainAddr);
+                    }
+                }
+            }
+        } catch (com.scholarship.scholartrust.exception.BlockchainRpcException ex) {
+            log.warn("Could not pre-verify on-chain wallet for app #{}: {}", applicationId, ex.getMessage());
         }
 
         // Execute on-chain disbursement
@@ -578,6 +584,50 @@ public class ApplicationService {
         }
 
         return audit;
+    }
+
+    @Transactional
+    public ApplicationResponse reconcileApplicationBlockchainState(Long applicationId) {
+        Application application = applicationRepository.findById(applicationId)
+                .orElseThrow(() -> new IllegalArgumentException("Application not found: " + applicationId));
+
+        // 1. Check if application has a txHash to verify
+        String txHash = application.getBlockchainTxHash();
+        if (txHash != null && !txHash.isBlank()) {
+            TransactionReceipt receipt = blockchainService.getTransactionReceipt(txHash);
+            if (receipt != null) {
+                if (receipt.isStatusOK()) {
+                    application.setBlockchainOperationStatus(BlockchainOperationStatus.CONFIRMED);
+                    application.setBlockchainError(null);
+                } else {
+                    application.setBlockchainOperationStatus(BlockchainOperationStatus.FAILED);
+                    application.setBlockchainError("Blockchain transaction reverted on block " + receipt.getBlockNumber());
+                }
+            }
+        }
+
+        // 2. Query smart contract state to reconcile status consistency
+        try {
+            List<Type> chainData = blockchainService.getApplicationFromChain(applicationId);
+            if (chainData != null && chainData.size() > 6 && ((Bool) chainData.get(6)).getValue()) {
+                application.setBlockchainOperationStatus(BlockchainOperationStatus.CONFIRMED);
+                application.setBlockchainError(null);
+
+                int onChainOrdinal = ((Uint8) chainData.get(4)).getValue().intValue();
+                ApplicationStatus onChainStatus = ApplicationStatus.fromChainOrdinal(onChainOrdinal);
+                // Synchronize if on-chain advanced to DISBURSED or APPROVED
+                if (onChainStatus == ApplicationStatus.DISBURSED && application.getStatus() != ApplicationStatus.DISBURSED) {
+                    application.setStatus(ApplicationStatus.DISBURSED);
+                } else if (onChainStatus == ApplicationStatus.APPROVED && application.getStatus() == ApplicationStatus.PENDING) {
+                    application.setStatus(ApplicationStatus.APPROVED);
+                }
+            }
+        } catch (Exception ex) {
+            log.warn("Reconciliation RPC warning for application {}: {}", applicationId, ex.getMessage());
+        }
+
+        Application saved = applicationRepository.save(application);
+        return mapToResponse(saved);
     }
 
     @Transactional(readOnly = true)

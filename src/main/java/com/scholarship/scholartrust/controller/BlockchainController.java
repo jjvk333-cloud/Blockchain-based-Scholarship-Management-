@@ -24,7 +24,7 @@ public class BlockchainController {
     }
 
     @GetMapping("/network")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> getNetworkDetails() {
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getNetworkDetails(org.springframework.security.core.Authentication authentication) {
         Map<String, Object> details = new LinkedHashMap<>();
         boolean isConnected = blockchainService.isConnected();
         BigInteger blockNumber = isConnected ? blockchainService.getLatestBlockNumber() : null;
@@ -38,8 +38,23 @@ public class BlockchainController {
         details.put("network", "Local Ethereum Node (Ganache)");
         details.put("contractAddress", blockchainService.getContractAddress());
         details.put("hasContractBytecode", hasBytecode);
-        details.put("adminAddress", blockchainService.getAdminAddress());
-        details.put("adminRelayerAddress", blockchainService.getAdminAddress());
+
+        boolean isAdmin = authentication != null && authentication.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+
+        String rawAdmin = blockchainService.getAdminAddress();
+        String maskedAdmin = (rawAdmin != null && rawAdmin.length() >= 10)
+                ? rawAdmin.substring(0, 6) + "..." + rawAdmin.substring(rawAdmin.length() - 4)
+                : "0x...";
+
+        if (isAdmin) {
+            details.put("adminAddress", rawAdmin);
+            details.put("adminRelayerAddress", rawAdmin);
+        } else {
+            details.put("adminAddress", maskedAdmin);
+            details.put("adminRelayerAddress", maskedAdmin);
+        }
+
         details.put("status", (isConnected && hasBytecode) ? "SYNCED & ACTIVE" : (isConnected ? "CONNECTED (NO CONTRACT)" : "DISCONNECTED"));
 
         return ResponseEntity.ok(ApiResponse.success("Blockchain network status retrieved", details));

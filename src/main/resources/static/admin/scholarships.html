@@ -109,9 +109,9 @@
         return `
         <tr>
           <td>${s.id}</td>
-          <td><strong>${title}</strong></td>
+          <td><strong>${escapeHtml(title)}</strong></td>
           <td>${fmtMoney(amount)}</td>
-          <td>${s.minGpa != null ? s.minGpa : '—'}</td>
+          <td>${s.minGpa != null ? escapeHtml(s.minGpa) : '—'}</td>
           <td>${fmtDate(s.deadline)}</td>
           <td>${badgeHtml(s.active ? 'ACTIVE' : 'INACTIVE')}</td>
           <td>

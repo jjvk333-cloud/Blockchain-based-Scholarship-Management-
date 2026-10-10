@@ -147,8 +147,8 @@
         }
         rows += `<tr>
           <td>#${app.id}</td>
-          <td>${app.studentName || '—'}</td>
-          <td>${app.scholarshipName || '—'}</td>
+          <td>${escapeHtml(app.studentName || '—')}</td>
+          <td>${escapeHtml(app.scholarshipName || '—')}</td>
           <td>${statusHtml}</td>
         </tr>`;
       }

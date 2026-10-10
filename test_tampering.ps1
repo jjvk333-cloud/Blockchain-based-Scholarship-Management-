@@ -8,8 +8,7 @@ $originalBytes = [System.IO.File]::ReadAllBytes($file.FullName)
 # Tamper with 1 byte of the file
 [System.IO.File]::AppendAllText($file.FullName, "TAMPERED_MODIFIED_DATA")
 
-# Admin triggers verification
-$adminAuth = Invoke-RestMethod -Uri "http://localhost:8080/api/auth/login" -Method Post -Body (@{email="admin@college.edu"; password="AdminPassword@123"} | ConvertTo-Json) -ContentType "application/json"
+$adminAuth = Invoke-RestMethod -Uri "http://localhost:8080/api/auth/login" -Method Post -Body (@{email="admin@college.edu"; password="Admin@123"} | ConvertTo-Json) -ContentType "application/json"
 $adminHeaders = @{ "Authorization" = "Bearer $($adminAuth.data.token)" }
 $tamperResult = Invoke-RestMethod -Uri "http://localhost:8080/api/admin/applications/documents/1/verify-hash" -Method Post -Headers $adminHeaders
 

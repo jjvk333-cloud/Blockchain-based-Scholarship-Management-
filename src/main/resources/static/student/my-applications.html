@@ -66,11 +66,11 @@
 
       const rows = apps.map(a => `
         <tr>
-          <td><strong>${a.scholarshipName || '—'}</strong></td>
+          <td><strong>${escapeHtml(a.scholarshipName || '—')}</strong></td>
           <td>${badgeHtml(a.status)}</td>
           <td>${fmtDate(a.appliedAt)}</td>
           <td style="font-family:monospace;font-size:.75rem;color:var(--info)">
-            ${a.blockchainTxHash ? a.blockchainTxHash.substring(0,18)+'…' : '<span style="color:var(--muted)">—</span>'}
+            ${a.blockchainTxHash ? escapeHtml(a.blockchainTxHash.substring(0,18))+'…' : '<span style="color:var(--muted)">—</span>'}
           </td>
           <td>
             <button class="btn btn-outline btn-sm" onclick='viewDetail(${JSON.stringify(a).replace(/'/g,"\\'")} )'>Details</button>
@@ -93,8 +93,8 @@
 
       const docs = (app.documents || []).map(d => `
         <div style="margin-bottom:12px;">
-          <div style="font-weight:600;font-size:.85rem;">${d.documentType}</div>
-          <div class="hash-box">${d.sha256Hash || '—'}</div>
+          <div style="font-weight:600;font-size:.85rem;">${escapeHtml(d.documentType)}</div>
+          <div class="hash-box">${escapeHtml(d.sha256Hash || '—')}</div>
           <button class="btn btn-info btn-sm" style="margin-top:6px;" onclick="verifyHash(${app.id}, ${d.id})">
             🔍 Verify Integrity
           </button>
@@ -102,7 +102,7 @@
         </div>`).join('');
 
       const chain = app.blockchainTxHash
-        ? `<div class="hash-box" style="margin-top:6px;">${app.blockchainTxHash}</div>`
+        ? `<div class="hash-box" style="margin-top:6px;">${escapeHtml(app.blockchainTxHash)}</div>`
         : '<span style="color:var(--muted)">Not yet recorded on blockchain</span>';
 
       let disburse = '';
@@ -113,8 +113,8 @@
             <table style="font-size:.85rem;">
               <tr><td style="padding:4px 8px;color:var(--muted)">Amount</td><td>${fmtMoney(app.disbursement.amount)}</td></tr>
               <tr><td style="padding:4px 8px;color:var(--muted)">Date</td><td>${fmtDate(app.disbursement.disbursedAt)}</td></tr>
-              <tr><td style="padding:4px 8px;color:var(--muted)">TX Hash</td><td style="font-family:monospace;font-size:.75rem;word-break:break-all">${app.disbursement.transactionHash || '—'}</td></tr>
-              <tr><td style="padding:4px 8px;color:var(--muted)">Block #</td><td>${app.disbursement.blockNumber || '—'}</td></tr>
+              <tr><td style="padding:4px 8px;color:var(--muted)">TX Hash</td><td style="font-family:monospace;font-size:.75rem;word-break:break-all">${escapeHtml(app.disbursement.transactionHash || '—')}</td></tr>
+              <tr><td style="padding:4px 8px;color:var(--muted)">Block #</td><td>${escapeHtml(app.disbursement.blockNumber || '—')}</td></tr>
             </table>
           </div>`;
       }

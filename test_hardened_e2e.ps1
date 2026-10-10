@@ -83,13 +83,13 @@ try {
 # 5. Institutional Identity Verification (IDENT-01 Workflow)
 $uploadDir = Join-Path $PSScriptRoot "uploads"
 if (-not (Test-Path $uploadDir)) { New-Item -ItemType Directory -Path $uploadDir -Force | Out-Null }
-$idCardFile = Join-Path $uploadDir "test_idcard_$rand.txt"
-"STUDENT INSTITUTIONAL ID CARD PROOF: CS$rand - College of Engineering" | Set-Content $idCardFile
+$idCardFile = Join-Path $uploadDir "test_idcard_$rand.pdf"
+[System.IO.File]::WriteAllBytes($idCardFile, [System.Text.Encoding]::UTF8.GetBytes("%PDF-1.4 STUDENT INSTITUTIONAL ID CARD PROOF: CS$rand - College of Engineering"))
 try {
     $idUploadOut = & curl.exe -s -X POST "$baseUrl/api/identity/upload" `
         -H "Authorization: Bearer $studentToken" `
         -F "institutionalIdNumber=CS$rand" `
-        -F "idCard=@$idCardFile;type=text/plain"
+        -F "idCard=@$idCardFile;type=application/pdf"
     $idUploadRes = $idUploadOut | ConvertFrom-Json
     $idVerifId = $idUploadRes.data.id
     Assert-Test ($idUploadRes.success -eq $true -and $idUploadRes.data.status -eq "PENDING") "6. Student submitted institutional ID card (PENDING verification)"
@@ -122,13 +122,13 @@ try {
 }
 
 # 7. Apply with Document Upload
-$sampleDoc = Join-Path $uploadDir "test_doc_$rand.txt"
-"ScholarTrust Official Verification Document - Student $rand - GPA 9.10" | Set-Content $sampleDoc
+$sampleDoc = Join-Path $uploadDir "test_doc_$rand.pdf"
+[System.IO.File]::WriteAllBytes($sampleDoc, [System.Text.Encoding]::UTF8.GetBytes("%PDF-1.4 ScholarTrust Official Verification Document - Student $rand - GPA 9.10"))
 try {
     $curlOut = & curl.exe -s -X POST "$baseUrl/api/applications/apply" `
         -H "Authorization: Bearer $studentToken" `
         -F "scholarshipId=1" `
-        -F "marksheet=@$sampleDoc;type=text/plain" `
+        -F "marksheet=@$sampleDoc;type=application/pdf" `
         -F "gpa=9.10" `
         -F "annualIncome=150000" `
         -F "personalStatement=Passionate about decentralized systems and research."
