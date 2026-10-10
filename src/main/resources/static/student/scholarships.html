@@ -98,8 +98,19 @@
     function doLogout() { API.clearSession(); window.location.href = '/student/login.html'; }
 
     let currentScholarshipId = null;
+    let studentProfile = null;
 
     async function loadScholarships() {
+      // Pre-fetch student profile for eligibility and auto-population
+      try {
+        const pRes = await API.get('/api/student/profile');
+        if (pRes && pRes.success) {
+          studentProfile = pRes.data;
+        }
+      } catch (e) {
+        console.warn('Could not pre-load profile:', e);
+      }
+
       const res = await fetch('/api/scholarships').then(r => r.json()).catch(() => null);
       if (!res || !res.success || !res.data.length) {
         document.getElementById('grid').innerHTML = '<div class="empty-state"><div class="empty-icon">📭</div><p>No scholarships available right now.</p></div>';
@@ -133,17 +144,39 @@
       document.getElementById('grid').innerHTML = cards;
     }
 
-    function openApply(id, name, active) {
+    async function openApply(id, name, active) {
       if (!active) { showAlert('alert', 'This scholarship is currently inactive.', 'warning'); return; }
       currentScholarshipId = id;
       document.getElementById('modalSchName').value = name;
-      document.getElementById('gpa').value = '';
-      document.getElementById('income').value = '';
       document.getElementById('statement').value = '';
       document.getElementById('marksheet').value = '';
       document.getElementById('incomeCert').value = '';
       document.getElementById('otherDoc').value = '';
       hideAlert('modalAlert');
+
+      // Auto-populate from studentProfile if available, or fetch fresh
+      if (!studentProfile) {
+        try {
+          const pRes = await API.get('/api/student/profile');
+          if (pRes && pRes.success) studentProfile = pRes.data;
+        } catch (e) {}
+      }
+
+      if (studentProfile) {
+        document.getElementById('gpa').value = studentProfile.gpa != null ? studentProfile.gpa : '';
+        document.getElementById('income').value = studentProfile.annualIncome != null ? studentProfile.annualIncome : '';
+
+        // Proactive Identity & Wallet Verification Warnings
+        if (studentProfile.verificationStatus !== 'VERIFIED') {
+          showAlert('modalAlert', `⚠️ <strong>Institutional Verification Required:</strong> Your identity status is <em>${studentProfile.verificationStatus || 'UNVERIFIED'}</em>. Please upload your student ID in <a href="/student/profile.html" style="color:inherit;text-decoration:underline;font-weight:bold;">Profile & Verification</a> before submitting.`, 'warning');
+        } else if (!studentProfile.walletAddress) {
+          showAlert('modalAlert', `⚠️ <strong>Blockchain Wallet Missing:</strong> Please configure your public Ethereum wallet address in <a href="/student/profile.html" style="color:inherit;text-decoration:underline;font-weight:bold;">Profile & Verification</a>.`, 'warning');
+        }
+      } else {
+        document.getElementById('gpa').value = '';
+        document.getElementById('income').value = '';
+      }
+
       openModal('applyModal');
     }
 
@@ -172,7 +205,13 @@
       setLoading('applyBtn', false, 'Submit Application');
 
       if (!res || !res.success) {
-        showAlert('modalAlert', res?.message || 'Submission failed. Try again.', 'error');
+        let msg = res?.message || 'Submission failed. Try again.';
+        if (msg.includes('verification required') || msg.includes('Institutional identity')) {
+          msg = `❌ <strong>Verification Error:</strong> ${msg} <br/><a href="/student/profile.html" class="btn btn-outline btn-sm" style="margin-top:8px;display:inline-block;">Go to Profile & Verification</a>`;
+        } else if (msg.includes('wallet') || msg.includes('Wallet')) {
+          msg = `❌ <strong>Wallet Error:</strong> ${msg} <br/><a href="/student/profile.html" class="btn btn-outline btn-sm" style="margin-top:8px;display:inline-block;">Go to Profile & Verification</a>`;
+        }
+        showAlert('modalAlert', msg, 'error');
         return;
       }
       showAlert('modalAlert', '✅ Application submitted! Blockchain record created.', 'success');
