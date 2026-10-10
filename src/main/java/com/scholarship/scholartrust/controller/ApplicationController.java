@@ -27,7 +27,6 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/applications")
-@CrossOrigin(origins = "*")
 public class ApplicationController {
 
     private final ApplicationService applicationService;
@@ -109,6 +108,17 @@ public class ApplicationController {
         boolean isAdmin = authentication.getAuthorities().stream()
                 .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
         HashVerificationResponse response = applicationService.verifyApplicationDocumentIntegrity(id, authentication.getName(), isAdmin);
+        return ResponseEntity.ok(ApiResponse.success("Document integrity verified", response));
+    }
+
+    @GetMapping("/documents/{documentId}/verify-hash")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<HashVerificationResponse>> verifySpecificDocumentHash(
+            @PathVariable Long documentId,
+            Authentication authentication) {
+        boolean isAdmin = authentication.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+        HashVerificationResponse response = applicationService.verifyDocumentIntegrity(documentId, authentication.getName(), isAdmin);
         return ResponseEntity.ok(ApiResponse.success("Document integrity verified", response));
     }
 

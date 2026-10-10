@@ -56,7 +56,11 @@ async function runBenchmark(numTrials = 20) {
         const verifyEnd = process.hrtime.bigint();
         const verifyLatencyMs = Number(verifyEnd - verifyStart) / 1e6;
 
-        // 4. Update Status to APPROVED (required by state machine)
+        // 4. Update Status to UNDER_REVIEW then APPROVED (strictly enforced by state machine)
+        await contract.methods.updateApplicationStatus(appId, 1).send({
+            from: admin,
+            gas: '150000'
+        });
         await contract.methods.updateApplicationStatus(appId, 2).send({
             from: admin,
             gas: '150000'

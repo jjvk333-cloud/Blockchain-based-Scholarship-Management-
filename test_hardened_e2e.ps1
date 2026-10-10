@@ -81,7 +81,9 @@ try {
 }
 
 # 5. Institutional Identity Verification (IDENT-01 Workflow)
-$idCardFile = "V:\Projects\scholartrust\uploads\test_idcard_$rand.txt"
+$uploadDir = Join-Path $PSScriptRoot "uploads"
+if (-not (Test-Path $uploadDir)) { New-Item -ItemType Directory -Path $uploadDir -Force | Out-Null }
+$idCardFile = Join-Path $uploadDir "test_idcard_$rand.txt"
 "STUDENT INSTITUTIONAL ID CARD PROOF: CS$rand - College of Engineering" | Set-Content $idCardFile
 try {
     $idUploadOut = & curl.exe -s -X POST "$baseUrl/api/identity/upload" `
@@ -120,7 +122,7 @@ try {
 }
 
 # 7. Apply with Document Upload
-$sampleDoc = "V:\Projects\scholartrust\uploads\test_doc_$rand.txt"
+$sampleDoc = Join-Path $uploadDir "test_doc_$rand.txt"
 "ScholarTrust Official Verification Document - Student $rand - GPA 9.10" | Set-Content $sampleDoc
 try {
     $curlOut = & curl.exe -s -X POST "$baseUrl/api/applications/apply" `

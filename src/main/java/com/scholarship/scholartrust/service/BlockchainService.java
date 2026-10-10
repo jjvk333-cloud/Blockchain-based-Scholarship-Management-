@@ -142,7 +142,14 @@ public class BlockchainService {
 
     public TransactionReceipt disburseScholarshipOnChain(Long applicationId, String studentWallet, BigDecimal amount) {
         try {
-            BigInteger amountUnits = amount.toBigInteger();
+            if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+                throw new IllegalArgumentException("Disbursement amount must be strictly positive");
+            }
+            if (amount.scale() > 2) {
+                throw new IllegalArgumentException("Disbursement amount cannot have precision beyond 2 decimal places (paise): " + amount);
+            }
+            // Exact paise integer conversion (1 Rupee = 100 Paise)
+            BigInteger amountUnits = amount.multiply(BigDecimal.valueOf(100)).setScale(0, java.math.RoundingMode.UNNECESSARY).toBigIntegerExact();
 
             Function function = new Function(
                     "disburseScholarship",
@@ -174,7 +181,7 @@ public class BlockchainService {
         }
     }
 
-    public boolean verifyHashOnChain(Long applicationId, String docHash) {
+    public String verifyHashOnChainResult(Long applicationId, String docHash) {
         try {
             Function function = new Function(
                     "verifyDocumentHash",
@@ -194,16 +201,30 @@ public class BlockchainService {
                     DefaultBlockParameterName.LATEST
             ).send();
 
+            if (ethCall.hasError()) {
+                String errMsg = ethCall.getError().getMessage();
+                if (errMsg != null && errMsg.contains("does not exist")) {
+                    return "NOT_ON_CHAIN";
+                }
+                log.warn("verifyDocumentHash EthCall error: {}", errMsg);
+                return "INCONCLUSIVE";
+            }
+
             List<Type> results = FunctionReturnDecoder.decode(ethCall.getValue(), function.getOutputParameters());
             if (results != null && !results.isEmpty()) {
                 Bool isMatch = (Bool) results.get(0);
-                return isMatch.getValue();
+                return isMatch.getValue() ? "VERIFIED" : "TAMPERED";
             }
-            return false;
+            return "NOT_ON_CHAIN";
         } catch (Exception ex) {
             log.error("Failed to query verifyDocumentHash from blockchain", ex);
-            return false;
+            return "BLOCKCHAIN_UNAVAILABLE";
         }
+    }
+
+    public boolean verifyHashOnChain(Long applicationId, String docHash) {
+        String res = verifyHashOnChainResult(applicationId, docHash);
+        return "VERIFIED".equalsIgnoreCase(res);
     }
 
     public List<Type> getApplicationFromChain(Long applicationId) {
@@ -227,6 +248,11 @@ public class BlockchainService {
                     Transaction.createEthCallTransaction(credentials.getAddress(), contractAddress, encoded),
                     DefaultBlockParameterName.LATEST
             ).send();
+
+            if (ethCall.hasError()) {
+                log.warn("getApplication EthCall error: {}", ethCall.getError().getMessage());
+                return Collections.emptyList();
+            }
 
             return FunctionReturnDecoder.decode(ethCall.getValue(), function.getOutputParameters());
         } catch (Exception ex) {
@@ -255,6 +281,11 @@ public class BlockchainService {
                     DefaultBlockParameterName.LATEST
             ).send();
 
+            if (ethCall.hasError()) {
+                log.warn("getDisbursement EthCall error: {}", ethCall.getError().getMessage());
+                return Collections.emptyList();
+            }
+
             return FunctionReturnDecoder.decode(ethCall.getValue(), function.getOutputParameters());
         } catch (Exception ex) {
             log.error("Failed to query getDisbursement from blockchain", ex);
@@ -266,7 +297,26 @@ public class BlockchainService {
         try {
             return web3j.ethBlockNumber().send().getBlockNumber();
         } catch (Exception e) {
-            return BigInteger.ZERO;
+            log.warn("Could not query ethBlockNumber: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    public boolean isConnected() {
+        try {
+            BigInteger blockNumber = web3j.ethBlockNumber().send().getBlockNumber();
+            String netVersion = web3j.netVersion().send().getNetVersion();
+            return blockNumber != null && netVersion != null;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    public String getContractCode() {
+        try {
+            return web3j.ethGetCode(contractAddress, DefaultBlockParameterName.LATEST).send().getCode();
+        } catch (Exception e) {
+            return null;
         }
     }
 

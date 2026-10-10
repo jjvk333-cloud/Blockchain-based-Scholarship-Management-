@@ -16,7 +16,6 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/admin/scholarships")
 @PreAuthorize("hasRole('ADMIN')")
-@CrossOrigin(origins = "*")
 public class AdminScholarshipController {
 
     private final ScholarshipService scholarshipService;

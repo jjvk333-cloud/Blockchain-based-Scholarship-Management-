@@ -32,6 +32,13 @@ public class Application {
     @Column(name = "blockchain_tx_hash", length = 66)
     private String blockchainTxHash;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "blockchain_operation_status", length = 30)
+    private BlockchainOperationStatus blockchainOperationStatus = BlockchainOperationStatus.NONE;
+
+    @Column(name = "blockchain_error", columnDefinition = "TEXT")
+    private String blockchainError;
+
     @Column(name = "admin_remarks", columnDefinition = "TEXT")
     private String adminRemarks;
 
@@ -122,6 +129,22 @@ public class Application {
 
     public void setBlockchainTxHash(String blockchainTxHash) {
         this.blockchainTxHash = blockchainTxHash;
+    }
+
+    public BlockchainOperationStatus getBlockchainOperationStatus() {
+        return blockchainOperationStatus;
+    }
+
+    public void setBlockchainOperationStatus(BlockchainOperationStatus blockchainOperationStatus) {
+        this.blockchainOperationStatus = blockchainOperationStatus;
+    }
+
+    public String getBlockchainError() {
+        return blockchainError;
+    }
+
+    public void setBlockchainError(String blockchainError) {
+        this.blockchainError = blockchainError;
     }
 
     public String getAdminRemarks() {

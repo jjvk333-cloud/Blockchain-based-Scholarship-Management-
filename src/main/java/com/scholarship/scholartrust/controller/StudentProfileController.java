@@ -11,7 +11,6 @@ import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping({"/api/student/profile", "/api/students/profile"})
-@CrossOrigin(origins = "*")
 public class StudentProfileController {
 
     private final StudentProfileService studentProfileService;
@@ -36,3 +35,4 @@ public class StudentProfileController {
         return ResponseEntity.ok(ApiResponse.success("Student profile updated successfully", updated));
     }
 }
+

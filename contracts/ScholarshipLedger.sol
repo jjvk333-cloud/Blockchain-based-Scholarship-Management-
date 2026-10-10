@@ -106,17 +106,32 @@ contract ScholarshipLedger {
 
     /**
      * @notice Updates the verification / approval status on-chain.
+     * Enforces a strict state machine:
+     * - SUBMITTED -> UNDER_REVIEW
+     * - UNDER_REVIEW -> APPROVED or REJECTED
+     * Any other transition (or transition from DISBURSED / REJECTED) is strictly reverted.
      */
     function updateApplicationStatus(
         uint256 _applicationId,
         uint8 _status
     ) external onlyAdmin {
         require(applications[_applicationId].exists, "Application does not exist");
-        require(_status < uint8(Status.DISBURSED), "Use disburseScholarship to transition to DISBURSED");
+        require(_status <= uint8(Status.REJECTED), "Invalid target status: use disburseScholarship for DISBURSED");
 
-        applications[_applicationId].status = Status(_status);
+        Status current = applications[_applicationId].status;
+        Status target = Status(_status);
 
-        emit StatusUpdated(_applicationId, Status(_status), block.timestamp);
+        if (current == Status.SUBMITTED) {
+            require(target == Status.UNDER_REVIEW, "State Machine Violation: SUBMITTED can only transition to UNDER_REVIEW");
+        } else if (current == Status.UNDER_REVIEW) {
+            require(target == Status.APPROVED || target == Status.REJECTED, "State Machine Violation: UNDER_REVIEW can only transition to APPROVED or REJECTED");
+        } else {
+            revert("State Machine Violation: Cannot change status of an already APPROVED, REJECTED, or DISBURSED application");
+        }
+
+        applications[_applicationId].status = target;
+
+        emit StatusUpdated(_applicationId, target, block.timestamp);
     }
 
     /**

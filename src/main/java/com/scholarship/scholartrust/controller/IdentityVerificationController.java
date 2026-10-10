@@ -14,7 +14,6 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/identity")
-@CrossOrigin(origins = "*")
 public class IdentityVerificationController {
 
     private final IdentityVerificationService identityVerificationService;
@@ -69,3 +68,4 @@ public class IdentityVerificationController {
         return ResponseEntity.ok(ApiResponse.success(msg, result));
     }
 }
+

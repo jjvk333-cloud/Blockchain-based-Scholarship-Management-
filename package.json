@@ -4,7 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node contracts/test_contract.js",
+    "deploy": "node contracts/deploy.js",
+    "benchmark": "node benchmark/benchmark_experiments.js"
   },
   "keywords": [],
   "author": "",

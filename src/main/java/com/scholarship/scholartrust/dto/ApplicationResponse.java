@@ -33,6 +33,8 @@ public class ApplicationResponse {
 
     private ApplicationStatus status;
     private String blockchainTxHash;
+    private com.scholarship.scholartrust.entity.BlockchainOperationStatus blockchainOperationStatus;
+    private String blockchainError;
     private String adminRemarks;
     private LocalDateTime appliedAt;
     private LocalDateTime updatedAt;
@@ -143,6 +145,12 @@ public class ApplicationResponse {
 
     public String getBlockchainTxHash() { return blockchainTxHash; }
     public void setBlockchainTxHash(String blockchainTxHash) { this.blockchainTxHash = blockchainTxHash; }
+
+    public com.scholarship.scholartrust.entity.BlockchainOperationStatus getBlockchainOperationStatus() { return blockchainOperationStatus; }
+    public void setBlockchainOperationStatus(com.scholarship.scholartrust.entity.BlockchainOperationStatus blockchainOperationStatus) { this.blockchainOperationStatus = blockchainOperationStatus; }
+
+    public String getBlockchainError() { return blockchainError; }
+    public void setBlockchainError(String blockchainError) { this.blockchainError = blockchainError; }
 
     public String getAdminRemarks() { return adminRemarks; }
     public void setAdminRemarks(String adminRemarks) { this.adminRemarks = adminRemarks; }

@@ -76,16 +76,16 @@ Public Blockchain Audit (Zero-Trust Ledger Verification)
 
 An automated empirical benchmark script (`benchmark/benchmark_experiments.js`) was executed against the smart contract on local EVM RPC to measure latency and gas overhead:
 
-### Experimental Metrics (Trial Sample $N = 15$):
+### Experimental Metrics (Trial Sample $N = 20$):
 
 | Operation | Metric | Mean | Std Dev | Gas Consumption |
 |---|---|---|---|---|
-| **Document Hash Digest** | Execution Time | `0.1115 ms` | `0.2136 ms` | — (Client CPU) |
-| **Record Application On-Chain** | Transaction Latency | `44.79 ms` | `13.88 ms` | `255,656 units` |
-| **Cryptographic Hash Query** | Call Latency | `12.79 ms` | `3.31 ms` | `0 units` (Read-only call) |
-| **Disbursement Transaction** | Transaction Latency | `35.98 ms` | `5.80 ms` | `150,137 units` |
+| **Document Hash Digest** | Execution Time | `0.0550 ms` | `0.0780 ms` | — (Client CPU) |
+| **Record Application On-Chain** | Transaction Latency | `26.56 ms` | `7.90 ms` | `255,657 units` |
+| **Cryptographic Hash Query** | Call Latency | `7.24 ms` | `2.24 ms` | `0 units` (Read-only call) |
+| **Disbursement Transaction** | Transaction Latency | `18.44 ms` | `1.98 ms` | `150,138 units` |
 
-> Full trial dataset exported to [`benchmark/benchmark_results.csv`](benchmark/benchmark_results.csv).
+> Full trial dataset synchronized in [`benchmark/benchmark_results.csv`](benchmark/benchmark_results.csv).
 
 To reproduce benchmarks:
 ```bash

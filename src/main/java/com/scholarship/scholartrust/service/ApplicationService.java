@@ -7,6 +7,8 @@ import com.scholarship.scholartrust.dto.DocumentResponse;
 import com.scholarship.scholartrust.dto.HashVerificationResponse;
 import com.scholarship.scholartrust.entity.*;
 import com.scholarship.scholartrust.repository.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,6 +32,8 @@ import java.util.stream.Collectors;
 
 @Service
 public class ApplicationService {
+
+    private static final Logger log = LoggerFactory.getLogger(ApplicationService.class);
 
     private final ApplicationRepository applicationRepository;
     private final ScholarshipRepository scholarshipRepository;
@@ -147,16 +151,24 @@ public class ApplicationService {
                     marksheetDoc.getSha256Hash()
             );
             savedApp.setBlockchainTxHash(txHash);
+            savedApp.setBlockchainOperationStatus(BlockchainOperationStatus.CONFIRMED);
+            savedApp.setBlockchainError(null);
             applicationRepository.save(savedApp);
         } catch (Exception e) {
-            // Log blockchain failure; DB application submission is preserved
+            log.error("Failed to anchor application #{} on blockchain: {}", savedApp.getId(), e.getMessage());
+            savedApp.setBlockchainOperationStatus(BlockchainOperationStatus.FAILED);
+            savedApp.setBlockchainError("Blockchain anchoring failed: " + e.getMessage());
+            applicationRepository.save(savedApp);
         }
 
         if (auditEventService != null) {
+            String auditDesc = savedApp.getBlockchainOperationStatus() == BlockchainOperationStatus.CONFIRMED
+                    ? "Application submitted with documents. Marksheet hash anchored on blockchain."
+                    : "Application submitted to database, but blockchain anchoring failed: " + savedApp.getBlockchainError();
             auditEventService.recordEvent(
                     savedApp.getId(), "APPLICATION_SUBMITTED", student.getEmail(), "STUDENT",
                     null, ApplicationStatus.PENDING.name(), savedApp.getBlockchainTxHash(),
-                    "Application submitted with documents. Marksheet hash anchored on blockchain."
+                    auditDesc
             );
         }
 
@@ -246,22 +258,30 @@ public class ApplicationService {
         response.setRecordedDatabaseHash(doc.getSha256Hash());
 
         boolean diskMatch = recalculatedHash.equalsIgnoreCase(doc.getSha256Hash());
+        String chainResult = blockchainService.verifyHashOnChainResult(applicationId, recalculatedHash);
 
-        boolean chainMatch = false;
-        boolean blockchainAvailable = true;
-        try {
-            chainMatch = blockchainService.verifyHashOnChain(applicationId, recalculatedHash);
-        } catch (Exception e) {
-            blockchainAvailable = false;
-        }
-
-        if (!blockchainAvailable) {
+        if ("BLOCKCHAIN_UNAVAILABLE".equalsIgnoreCase(chainResult)) {
             response.setMatch(false);
             response.setStatus("BLOCKCHAIN_UNAVAILABLE");
             response.setVerdictDetails("Cryptographic verification incomplete: Blockchain node is currently unavailable. Stored database record is " + (diskMatch ? "intact on disk" : "tampered on disk") + ".");
             return response;
         }
 
+        if ("NOT_ON_CHAIN".equalsIgnoreCase(chainResult)) {
+            response.setMatch(false);
+            response.setStatus("NOT_ON_CHAIN");
+            response.setVerdictDetails("Application is not yet recorded on the blockchain ledger. Database file is " + (diskMatch ? "intact on disk" : "tampered on disk") + ".");
+            return response;
+        }
+
+        if ("INCONCLUSIVE".equalsIgnoreCase(chainResult)) {
+            response.setMatch(false);
+            response.setStatus("INCONCLUSIVE");
+            response.setVerdictDetails("Blockchain verification inconclusive due to RPC execution warning.");
+            return response;
+        }
+
+        boolean chainMatch = "VERIFIED".equalsIgnoreCase(chainResult);
         boolean match = diskMatch && chainMatch;
         response.setMatch(match);
 
@@ -281,9 +301,66 @@ public class ApplicationService {
 
     @Transactional(readOnly = true)
     public HashVerificationResponse verifyDocumentIntegrity(Long documentId) {
+        return verifyDocumentIntegrity(documentId, null, true);
+    }
+
+    @Transactional(readOnly = true)
+    public HashVerificationResponse verifyDocumentIntegrity(Long documentId, String requestingEmail, boolean isAdmin) {
         Document doc = documentRepository.findById(documentId)
                 .orElseThrow(() -> new IllegalArgumentException("Document not found: " + documentId));
-        return verifyApplicationDocumentIntegrity(doc.getApplication().getId());
+
+        Application app = doc.getApplication();
+        if (!isAdmin && (requestingEmail == null || !app.getStudent().getEmail().equalsIgnoreCase(requestingEmail))) {
+            throw new AccessDeniedException("Access denied: You do not have permission to verify document " + documentId);
+        }
+
+        Path filePath = fileStorageService.resolvePath(doc.getFilePath());
+        String recalculatedHash = fileStorageService.calculateSha256(filePath);
+
+        HashVerificationResponse response = new HashVerificationResponse();
+        response.setDocumentId(doc.getId());
+        response.setDocumentType(doc.getDocumentType());
+        response.setFileName(doc.getFileName());
+        response.setCalculatedHash(recalculatedHash);
+        response.setRecordedDatabaseHash(doc.getSha256Hash());
+
+        boolean diskMatch = recalculatedHash.equalsIgnoreCase(doc.getSha256Hash());
+
+        // Check against on-chain anchor for this application
+        String chainResult = blockchainService.verifyHashOnChainResult(app.getId(), recalculatedHash);
+        if ("BLOCKCHAIN_UNAVAILABLE".equalsIgnoreCase(chainResult)) {
+            response.setMatch(false);
+            response.setStatus("BLOCKCHAIN_UNAVAILABLE");
+            response.setVerdictDetails("Blockchain node is unavailable. Stored database record is " + (diskMatch ? "intact on disk." : "tampered on disk."));
+            return response;
+        }
+
+        if ("NOT_ON_CHAIN".equalsIgnoreCase(chainResult)) {
+            response.setMatch(false);
+            response.setStatus("NOT_ON_CHAIN");
+            response.setVerdictDetails("Application is not yet recorded on the blockchain ledger. File is " + (diskMatch ? "intact on disk." : "tampered on disk."));
+            return response;
+        }
+
+        boolean chainMatch = "VERIFIED".equalsIgnoreCase(chainResult);
+        boolean match = diskMatch && (chainMatch || (doc.getDocumentType() != DocumentType.MARKSHEET && diskMatch));
+        response.setMatch(match);
+
+        if (diskMatch && chainMatch) {
+            response.setStatus("MATCH");
+            response.setVerdictDetails("Document integrity verified on disk and anchored on-chain.");
+        } else if (diskMatch && doc.getDocumentType() != DocumentType.MARKSHEET) {
+            response.setStatus("MATCH");
+            response.setVerdictDetails("Supporting document integrity verified against database record.");
+        } else if (!diskMatch) {
+            response.setStatus("TAMPERED");
+            response.setVerdictDetails("TAMPER DETECTED: Document modified on disk!");
+        } else {
+            response.setStatus("TAMPERED");
+            response.setVerdictDetails("TAMPER DETECTED: Hash does not match on-chain anchor!");
+        }
+
+        return response;
     }
 
     @Transactional
@@ -291,15 +368,47 @@ public class ApplicationService {
         Application application = applicationRepository.findById(applicationId)
                 .orElseThrow(() -> new IllegalArgumentException("Application not found: " + applicationId));
 
+        ApplicationStatus currentStatus = application.getStatus();
+        if (currentStatus == ApplicationStatus.DISBURSED) {
+            throw new IllegalStateException("Cannot change status of an already DISBURSED application.");
+        }
+        if (currentStatus == ApplicationStatus.REJECTED && newStatus != ApplicationStatus.REJECTED) {
+            throw new IllegalStateException("Cannot change status of an already REJECTED application.");
+        }
+        if (newStatus == ApplicationStatus.DISBURSED) {
+            throw new IllegalArgumentException("Use the dedicated disbursement endpoint to disburse funds.");
+        }
+
+        // Handle on-chain state machine:
+        // Smart contract requires: SUBMITTED (0) -> UNDER_REVIEW (1) -> APPROVED (2) or REJECTED (3)
+        try {
+            if (currentStatus == ApplicationStatus.PENDING && newStatus == ApplicationStatus.APPROVED) {
+                // Step through UNDER_REVIEW first so smart contract state machine is satisfied
+                blockchainService.updateStatusOnChain(applicationId, ApplicationStatus.REVIEWING.toChainOrdinal());
+                String txHash = blockchainService.updateStatusOnChain(applicationId, newStatus.toChainOrdinal());
+                application.setBlockchainTxHash(txHash);
+            } else if (currentStatus == ApplicationStatus.PENDING && newStatus == ApplicationStatus.REJECTED) {
+                // Step through UNDER_REVIEW first
+                blockchainService.updateStatusOnChain(applicationId, ApplicationStatus.REVIEWING.toChainOrdinal());
+                String txHash = blockchainService.updateStatusOnChain(applicationId, newStatus.toChainOrdinal());
+                application.setBlockchainTxHash(txHash);
+            } else {
+                String txHash = blockchainService.updateStatusOnChain(applicationId, newStatus.toChainOrdinal());
+                application.setBlockchainTxHash(txHash);
+            }
+            application.setBlockchainOperationStatus(BlockchainOperationStatus.CONFIRMED);
+            application.setBlockchainError(null);
+        } catch (Exception e) {
+            log.error("Blockchain status update failed for application #{}: {}", applicationId, e.getMessage());
+            application.setBlockchainOperationStatus(BlockchainOperationStatus.FAILED);
+            application.setBlockchainError("Blockchain status update failed: " + e.getMessage());
+            // Do not claim blockchain success; fail the operation cleanly so caller knows
+            throw new IllegalStateException("Failed to update status on blockchain: " + e.getMessage() + ". Database state was not altered.");
+        }
+
         application.setStatus(newStatus);
         if (remarks != null && !remarks.isBlank()) {
             application.setAdminRemarks(remarks);
-        }
-
-        try {
-            blockchainService.updateStatusOnChain(applicationId, newStatus.toChainOrdinal());
-        } catch (Exception e) {
-            // Blockchain failure does not block status update in DB
         }
 
         Application saved = applicationRepository.save(application);
@@ -307,7 +416,7 @@ public class ApplicationService {
         if (auditEventService != null) {
             auditEventService.recordEvent(
                     applicationId, "STATUS_CHANGED", "admin", "ADMIN",
-                    null, newStatus.name(), null,
+                    currentStatus.name(), newStatus.name(), saved.getBlockchainTxHash(),
                     "Application status changed to " + newStatus.name() + (remarks != null ? ". Remarks: " + remarks : "")
             );
         }
@@ -571,6 +680,8 @@ public class ApplicationService {
 
         dto.setStatus(app.getStatus());
         dto.setBlockchainTxHash(app.getBlockchainTxHash());
+        dto.setBlockchainOperationStatus(app.getBlockchainOperationStatus());
+        dto.setBlockchainError(app.getBlockchainError());
         dto.setAdminRemarks(app.getAdminRemarks());
         dto.setAppliedAt(app.getAppliedAt());
         dto.setUpdatedAt(app.getUpdatedAt());

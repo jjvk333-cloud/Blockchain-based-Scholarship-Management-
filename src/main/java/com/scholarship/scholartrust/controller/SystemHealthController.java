@@ -39,3 +39,4 @@ public class SystemHealthController {
         return ResponseEntity.ok(ApiResponse.success("ScholarTrust backend foundation is healthy and connected to MySQL!", statusInfo));
     }
 }
+

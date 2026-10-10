@@ -13,7 +13,6 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/blockchain")
-@CrossOrigin(origins = "*")
 public class BlockchainController {
 
     private final BlockchainService blockchainService;
@@ -27,8 +26,10 @@ public class BlockchainController {
     @GetMapping("/network")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getNetworkDetails() {
         Map<String, Object> details = new LinkedHashMap<>();
-        BigInteger blockNumber = blockchainService.getLatestBlockNumber();
-        boolean isConnected = blockNumber != null && blockNumber.compareTo(BigInteger.ZERO) >= 0;
+        boolean isConnected = blockchainService.isConnected();
+        BigInteger blockNumber = isConnected ? blockchainService.getLatestBlockNumber() : null;
+        String contractCode = isConnected ? blockchainService.getContractCode() : null;
+        boolean hasBytecode = contractCode != null && contractCode.length() > 2;
 
         details.put("connected", isConnected);
         details.put("blockNumber", blockNumber);
@@ -36,9 +37,10 @@ public class BlockchainController {
         details.put("networkId", "1337 (Ganache)");
         details.put("network", "Local Ethereum Node (Ganache)");
         details.put("contractAddress", blockchainService.getContractAddress());
+        details.put("hasContractBytecode", hasBytecode);
         details.put("adminAddress", blockchainService.getAdminAddress());
         details.put("adminRelayerAddress", blockchainService.getAdminAddress());
-        details.put("status", isConnected ? "SYNCED & ACTIVE" : "DISCONNECTED");
+        details.put("status", (isConnected && hasBytecode) ? "SYNCED & ACTIVE" : (isConnected ? "CONNECTED (NO CONTRACT)" : "DISCONNECTED"));
 
         return ResponseEntity.ok(ApiResponse.success("Blockchain network status retrieved", details));
     }

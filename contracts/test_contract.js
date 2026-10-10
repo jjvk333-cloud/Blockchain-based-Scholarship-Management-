@@ -16,7 +16,7 @@ async function test() {
     console.log("Current Block Number:", (await web3.eth.getBlockNumber()).toString());
 
     console.log("\n=== 2. Recording Scholarship Application on Smart Contract ===");
-    const appId = 101;
+    const appId = Math.floor(Date.now() / 1000);
     const studentWallet = "0x71C7656EC7ab88b098defB751B7401B5f6d8976F";
     const scholarshipId = 1;
     const docHash = "ccd4ada9899fb66011fbc5b444b5477cfbb7b1ef833ccc5ebdacd0e4835b3f94";
@@ -45,12 +45,32 @@ async function test() {
     const tamperedCheck = await contract.methods.verifyDocumentHash(appId, fakeHash).call();
     console.log("Tampered Document Hash Check -> isMatch:", tamperedCheck.isMatch);
 
-    console.log("\n=== 5. Updating Status to APPROVED ===");
+    console.log("\n=== 5. Testing Strict State Machine Transitions ===");
+    // Valid: 0 (SUBMITTED) -> 1 (UNDER_REVIEW)
+    const reviewTx = await contract.methods.updateApplicationStatus(appId, 1).send({
+        from: admin,
+        gas: '150000'
+    });
+    console.log("Transited to UNDER_REVIEW (Ordinal 1). Tx:", reviewTx.transactionHash);
+
+    // Invalid transition test: 1 (UNDER_REVIEW) -> 0 (SUBMITTED) must REVERT
+    try {
+        await contract.methods.updateApplicationStatus(appId, 0).send({
+            from: admin,
+            gas: '150000'
+        });
+        console.error("FAIL: State machine allowed illegal transition back to SUBMITTED!");
+        process.exit(1);
+    } catch (e) {
+        console.log("PASS: Invalid transition back to SUBMITTED reverted as expected.");
+    }
+
+    // Valid: 1 (UNDER_REVIEW) -> 2 (APPROVED)
     const approveTx = await contract.methods.updateApplicationStatus(appId, 2).send({
         from: admin,
         gas: '150000'
     });
-    console.log("Approval Tx Hash:", approveTx.transactionHash);
+    console.log("Approval Tx Hash (Transited to APPROVED):", approveTx.transactionHash);
 
     console.log("\n=== 6. Simulating On-Chain Scholarship Disbursement ===");
     const grantAmount = 50000;

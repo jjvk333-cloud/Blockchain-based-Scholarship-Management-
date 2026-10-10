@@ -15,7 +15,6 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/audit")
-@CrossOrigin(origins = "*")
 public class AuditTimelineController {
 
     private final AuditEventService auditEventService;
@@ -69,3 +68,4 @@ public class AuditTimelineController {
         return ResponseEntity.ok(ApiResponse.success("Recent blockchain transactions retrieved", recent));
     }
 }
+
