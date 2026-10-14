@@ -99,17 +99,29 @@ async function main() {
         console.log(`Synchronized application.properties with contract address: ${contractAddress}\n`);
     }
 
-    // Synchronize .env.example
-    const envExamplePath = path.resolve(__dirname, '../.env.example');
-    if (fs.existsSync(envExamplePath)) {
-        let envContent = fs.readFileSync(envExamplePath, 'utf8');
-        envContent = envContent.replace(
-            /BLOCKCHAIN_CONTRACT_ADDRESS=.*/,
-            `BLOCKCHAIN_CONTRACT_ADDRESS=${contractAddress}`
-        );
-        fs.writeFileSync(envExamplePath, envContent, 'utf8');
-        console.log(`Synchronized .env.example with contract address: ${contractAddress}`);
-    }
+        // Synchronize .env.example
+        const envExamplePath = path.resolve(__dirname, '../.env.example');
+        if (fs.existsSync(envExamplePath)) {
+            let envContent = fs.readFileSync(envExamplePath, 'utf8');
+            envContent = envContent.replace(
+                /BLOCKCHAIN_CONTRACT_ADDRESS=.*/,
+                `BLOCKCHAIN_CONTRACT_ADDRESS=${contractAddress}`
+            );
+            fs.writeFileSync(envExamplePath, envContent, 'utf8');
+            console.log(`Synchronized .env.example with contract address: ${contractAddress}`);
+        }
+
+        // Synchronize .env if present
+        const envPath = path.resolve(__dirname, '../.env');
+        if (fs.existsSync(envPath)) {
+            let envContent = fs.readFileSync(envPath, 'utf8');
+            envContent = envContent.replace(
+                /BLOCKCHAIN_CONTRACT_ADDRESS=.*/,
+                `BLOCKCHAIN_CONTRACT_ADDRESS=${contractAddress}`
+            );
+            fs.writeFileSync(envPath, envContent, 'utf8');
+            console.log(`Synchronized .env with contract address: ${contractAddress}`);
+        }
 }
 
 main().catch(err => {
